@@ -46,8 +46,15 @@ const NEWS_SOURCES = [
 // RSSフィードをパースする関数
 async function parseRSS(url) {
   try {
+    console.log(`Fetching RSS feed: ${url}`);
     const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const xml = await response.text();
+    console.log(`RSS feed fetched successfully, length: ${xml.length} characters`);
     
     // 簡単なXMLパース（実際のプロダクションではxml2jsなどのライブラリを使用推奨）
     const items = [];
@@ -76,9 +83,11 @@ async function parseRSS(url) {
       }
     }
     
+    console.log(`Parsed ${items.length} items from ${url}`);
     return items;
   } catch (error) {
     console.error(`Error parsing RSS feed ${url}:`, error);
+    console.error(`Error details:`, error.message);
     return [];
   }
 }
@@ -224,13 +233,23 @@ async function sendToSlack(newsItems) {
 async function main() {
   try {
     console.log('Starting AI news collection...');
+    console.log('Environment check:');
+    console.log('- SLACK_BOT_TOKEN:', process.env.SLACK_BOT_TOKEN ? 'SET' : 'NOT SET');
+    console.log('- SLACK_CHANNEL_ID:', process.env.SLACK_CHANNEL_ID || 'NOT SET');
+    console.log('- TZ:', process.env.TZ || 'NOT SET');
+    
     const newsItems = await fetchAINews();
     console.log(`Found ${newsItems.length} relevant AI news items`);
+    
+    if (newsItems.length > 0) {
+      console.log('Sample news item:', JSON.stringify(newsItems[0], null, 2));
+    }
     
     await sendToSlack(newsItems);
     console.log('AI news delivery completed');
   } catch (error) {
     console.error('Error in main execution:', error);
+    console.error('Error stack:', error.stack);
     
     // エラー時にもSlackに通知
     try {

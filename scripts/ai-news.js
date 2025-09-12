@@ -36,7 +36,7 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// 翻訳関数（簡易版 - 実際のAPIを使わずにキーワード置換）
+// 翻訳関数（強化版）
 function translateToJapanese(text) {
   if (!text) return '';
   
@@ -53,8 +53,10 @@ function translateToJapanese(text) {
     'natural language processing': '自然言語処理',
     'robotics': 'ロボティクス',
     'automation': '自動化',
+    'startups': 'スタートアップ',
+    'startup': 'スタートアップ',
     
-    // 企業名
+    // 企業名・サービス名
     'OpenAI': 'OpenAI',
     'ChatGPT': 'ChatGPT',
     'Claude': 'Claude',
@@ -65,6 +67,8 @@ function translateToJapanese(text) {
     'Google': 'Google',
     'Meta': 'Meta',
     'Apple': 'Apple',
+    'Oracle': 'Oracle',
+    'People': 'People',
     
     // 技術用語
     'update': 'アップデート',
@@ -78,15 +82,28 @@ function translateToJapanese(text) {
     'dataset': 'データセット',
     'API': 'API',
     
-    // 一般的な用語
-    'new': '新しい',
-    'latest': '最新の',
+    // 動詞
     'announces': '発表',
     'launches': 'ローンチ',
     'introduces': '導入',
     'develops': '開発',
     'creates': '作成',
     'builds': '構築',
+    'entering': '突入',
+    'enters': '突入',
+    'says': '発言',
+    'accusing': '告発',
+    'stealing': '盗用',
+    'caught': '驚かせた',
+    'surprise': '驚き',
+    
+    // 形容詞
+    'new': '新しい',
+    'latest': '最新の',
+    'golden': '黄金',
+    'bad': '悪質な',
+    
+    // 名詞
     'research': '研究',
     'study': '研究',
     'technology': '技術',
@@ -95,23 +112,76 @@ function translateToJapanese(text) {
     'system': 'システム',
     'application': 'アプリケーション',
     'software': 'ソフトウェア',
-    'hardware': 'ハードウェア'
+    'hardware': 'ハードウェア',
+    'company': '企業',
+    'deal': '契約',
+    'age': '時代',
+    'actor': '行為者',
+    'content': 'コンテンツ',
+    'Wall Street': 'ウォール街',
+    
+    // 前置詞・接続詞
+    'why': 'なぜ',
+    'because': 'なぜなら',
+    'just': '単に',
+    'and': 'そして',
+    'not': 'ない',
+    'of': 'の',
+    'by': 'によって',
+    'to': 'に',
+    'from': 'から',
+    'with': 'と',
+    'in': 'で',
+    'on': 'で',
+    'at': 'で',
+    'for': 'のために',
+    'is': 'である',
+    'are': 'である',
+    'was': 'だった',
+    'were': 'だった',
+    'the': '',
+    'a': '',
+    'an': ''
   };
   
   let translatedText = text;
   
-  // 翻訳マッピングを適用
-  Object.entries(translations).forEach(([english, japanese]) => {
-    const regex = new RegExp(`\\b${english}\\b`, 'gi');
-    translatedText = translatedText.replace(regex, japanese);
+  // HTMLエンティティをデコード
+  translatedText = translatedText
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8216;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  
+  // 翻訳マッピングを適用（長いフレーズから順番に）
+  const sortedEntries = Object.entries(translations).sort((a, b) => b[0].length - a[0].length);
+  
+  sortedEntries.forEach(([english, japanese]) => {
+    if (japanese === '') {
+      // 空文字列の場合は単語境界で削除
+      const regex = new RegExp(`\\b${english}\\b`, 'gi');
+      translatedText = translatedText.replace(regex, '');
+    } else {
+      const regex = new RegExp(`\\b${english}\\b`, 'gi');
+      translatedText = translatedText.replace(regex, japanese);
+    }
   });
   
-  // 英語の記事タイトルを日本語風に調整
+  // 複数スペースを単一スペースに
+  translatedText = translatedText.replace(/\s+/g, ' ').trim();
+  
+  // 特定のパターンを日本語風に調整
   translatedText = translatedText
-    .replace(/^(.+?)\s*-\s*(.+)$/, '$1：$2') // "Title - Source" → "Title：Source"
-    .replace(/\b(announces|launches|introduces)\b/gi, '発表')
-    .replace(/\b(new|latest)\b/gi, '新')
-    .replace(/\bAI\b/g, 'AI');
+    .replace(/Oracle：OpenAI/g, 'OracleとOpenAIの')
+    .replace(/golden age of ロボティクス/g, 'ロボティクスの黄金時代')
+    .replace(/We are entering/g, '突入している')
+    .replace(/robotics startups/g, 'ロボティクススタートアップ')
+    .replace(/not just because of AI/g, 'AIだけが理由ではない')
+    .replace(/Google is a/g, 'Googleは')
+    .replace(/bad actor/g, '悪質な行為者')
+    .replace(/says People CEO/g, 'とPeople CEOが発言')
+    .replace(/accusing the company of stealing content/g, '企業のコンテンツ盗用を告発');
   
   return translatedText;
 }

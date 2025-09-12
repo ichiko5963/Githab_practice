@@ -1,0 +1,18 @@
+{
+  "name": "slack-event-reminder-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "scripts/remind.js",
+  "scripts": {
+    "start": "node scripts/remind.js",
+    "lint": "echo 'No linter configured'"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.0.4",
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.2.0"
+  }
+}
+
+

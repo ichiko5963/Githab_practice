@@ -36,6 +36,86 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
+// 翻訳関数（簡易版 - 実際のAPIを使わずにキーワード置換）
+function translateToJapanese(text) {
+  if (!text) return '';
+  
+  // 基本的な翻訳マッピング
+  const translations = {
+    // AI関連用語
+    'artificial intelligence': '人工知能',
+    'machine learning': '機械学習',
+    'deep learning': '深層学習',
+    'neural network': 'ニューラルネットワーク',
+    'large language model': '大規模言語モデル',
+    'generative AI': '生成AI',
+    'computer vision': 'コンピュータビジョン',
+    'natural language processing': '自然言語処理',
+    'robotics': 'ロボティクス',
+    'automation': '自動化',
+    
+    // 企業名
+    'OpenAI': 'OpenAI',
+    'ChatGPT': 'ChatGPT',
+    'Claude': 'Claude',
+    'Gemini': 'Gemini',
+    'Google AI': 'Google AI',
+    'Anthropic': 'Anthropic',
+    'Microsoft': 'Microsoft',
+    'Google': 'Google',
+    'Meta': 'Meta',
+    'Apple': 'Apple',
+    
+    // 技術用語
+    'update': 'アップデート',
+    'release': 'リリース',
+    'feature': '機能',
+    'breakthrough': 'ブレークスルー',
+    'innovation': 'イノベーション',
+    'algorithm': 'アルゴリズム',
+    'model': 'モデル',
+    'training': 'トレーニング',
+    'dataset': 'データセット',
+    'API': 'API',
+    
+    // 一般的な用語
+    'new': '新しい',
+    'latest': '最新の',
+    'announces': '発表',
+    'launches': 'ローンチ',
+    'introduces': '導入',
+    'develops': '開発',
+    'creates': '作成',
+    'builds': '構築',
+    'research': '研究',
+    'study': '研究',
+    'technology': '技術',
+    'platform': 'プラットフォーム',
+    'tool': 'ツール',
+    'system': 'システム',
+    'application': 'アプリケーション',
+    'software': 'ソフトウェア',
+    'hardware': 'ハードウェア'
+  };
+  
+  let translatedText = text;
+  
+  // 翻訳マッピングを適用
+  Object.entries(translations).forEach(([english, japanese]) => {
+    const regex = new RegExp(`\\b${english}\\b`, 'gi');
+    translatedText = translatedText.replace(regex, japanese);
+  });
+  
+  // 英語の記事タイトルを日本語風に調整
+  translatedText = translatedText
+    .replace(/^(.+?)\s*-\s*(.+)$/, '$1：$2') // "Title - Source" → "Title：Source"
+    .replace(/\b(announces|launches|introduces)\b/gi, '発表')
+    .replace(/\b(new|latest)\b/gi, '新')
+    .replace(/\bAI\b/g, 'AI');
+  
+  return translatedText;
+}
+
 // ニュースソース（信頼できるRSSフィード）
 const NEWS_SOURCES = [
   {
@@ -200,16 +280,18 @@ async function main() {
 async function sendToSlack(newsItems) {
   console.log(`📤 Slackに送信中... (チャンネル: ${SLACK_CHANNEL_ID})`);
   
+  const today = format(new Date(), 'yyyy年MM月dd日');
+  
   if (newsItems.length === 0) {
     const message = {
       channel: SLACK_CHANNEL_ID,
-      text: "🤖 AIニュースまとめ",
+      text: `【${today}】のAIニュース`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*🤖 ${format(new Date(), 'yyyy年MM月dd日')} AIニュースまとめ*\n\n過去24時間で特に注目すべきAI関連のニュースはありませんでした。`
+            text: `*【${today}】のAIニュース*\n\n過去24時間で特に注目すべきAI関連のニュースはありませんでした。`
           }
         }
       ]
@@ -220,44 +302,50 @@ async function sendToSlack(newsItems) {
     return;
   }
   
+  // ニュースアイテムを翻訳
+  const translatedNews = newsItems.map((news, index) => {
+    const translatedTitle = translateToJapanese(news.title);
+    const translatedDescription = translateToJapanese(news.description);
+    
+    console.log(`🔄 翻訳 ${index + 1}: ${news.title} → ${translatedTitle}`);
+    
+    return {
+      ...news,
+      title: translatedTitle,
+      description: translatedDescription
+    };
+  });
+  
+  // 指定された形式でメッセージを作成
+  let messageText = `【${today}】のAIニュース\n\n`;
+  
+  translatedNews.forEach((news, index) => {
+    const emoji = ['①', '②', '③'][index] || `${index + 1}.`;
+    messageText += `${emoji} ${news.title}\n`;
+    messageText += `${news.description}\n`;
+    messageText += `<${news.link}|記事を読む> | 📰 ${news.source}\n\n`;
+  });
+  
   const blocks = [
     {
-      type: "header",
-      text: {
-        type: "plain_text",
-        text: `🤖 ${format(new Date(), 'yyyy年MM月dd日')} AIニュースまとめ`
-      }
-    },
-    {
-      type: "divider"
-    }
-  ];
-  
-  newsItems.forEach((news, index) => {
-    blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${index + 1}. ${news.title}*\n${news.description}\n<${news.link}|記事を読む> | 📰 ${news.source}`
+        text: messageText
       }
-    });
-    
-    if (index < newsItems.length - 1) {
-      blocks.push({
-        type: "divider"
-      });
     }
-  });
+  ];
   
   const message = {
     channel: SLACK_CHANNEL_ID,
-    text: `AIニュースまとめ - ${format(new Date(), 'yyyy年MM月dd日')}`,
+    text: `【${today}】のAIニュース`,
     blocks: blocks
   };
   
   const result = await slack.chat.postMessage(message);
   console.log('✓ メッセージ送信完了');
   console.log(`📊 送信したニュース数: ${newsItems.length}件`);
+  console.log('🌏 日本語翻訳済み');
 }
 
 // スクリプト実行

@@ -6,6 +6,7 @@
   "main": "scripts/remind.js",
   "scripts": {
     "start": "node scripts/remind.js",
+    "ai-news": "node scripts/ai-news.js",
     "lint": "echo 'No linter configured'"
   },
   "dependencies": {

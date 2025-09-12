@@ -1,9 +1,31 @@
 import { WebClient } from '@slack/web-api';
-import { format, subDays, subHours } from 'date-fns';
+import { format } from 'date-fns';
 
-const client = new WebClient(process.env.SLACK_BOT_TOKEN);
-const CHANNEL_ID = process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_ID_AI_NEWS || '#aiニュース';
+// 設定
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
+const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
 const TZ = 'Asia/Tokyo';
+
+// デバッグ情報を出力
+console.log('=== AI News Bot 開始 ===');
+console.log('環境変数チェック:');
+console.log('- SLACK_BOT_TOKEN:', SLACK_BOT_TOKEN ? '✓ 設定済み' : '✗ 未設定');
+console.log('- SLACK_CHANNEL_ID:', SLACK_CHANNEL_ID || '✗ 未設定');
+console.log('- TZ:', TZ);
+
+// 必須環境変数のチェック
+if (!SLACK_BOT_TOKEN) {
+  console.error('❌ SLACK_BOT_TOKEN が設定されていません');
+  process.exit(1);
+}
+
+if (!SLACK_CHANNEL_ID) {
+  console.error('❌ SLACK_CHANNEL_ID が設定されていません');
+  process.exit(1);
+}
+
+// Slackクライアント初期化
+const slack = new WebClient(SLACK_BOT_TOKEN);
 
 // AI関連のキーワード
 const AI_KEYWORDS = [
@@ -14,98 +36,91 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// RSSフィードとAPIのソース
+// ニュースソース（信頼できるRSSフィード）
 const NEWS_SOURCES = [
   {
     name: 'TechCrunch AI',
-    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-    type: 'rss'
+    url: 'https://techcrunch.com/category/artificial-intelligence/feed/'
   },
   {
-    name: 'The Verge AI',
-    url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',
-    type: 'rss'
+    name: 'The Verge',
+    url: 'https://www.theverge.com/rss/index.xml'
   },
   {
     name: 'MIT Technology Review AI',
-    url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed/',
-    type: 'rss'
+    url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed/'
   },
   {
-    name: 'Ars Technica AI',
-    url: 'https://feeds.arstechnica.com/arstechnica/index/',
-    type: 'rss'
-  },
-  {
-    name: 'VentureBeat AI',
-    url: 'https://venturebeat.com/ai/feed/',
-    type: 'rss'
+    name: 'Ars Technica',
+    url: 'https://feeds.arstechnica.com/arstechnica/index/'
   }
 ];
 
-// RSSフィードをパースする関数
-async function parseRSS(url) {
+// RSSフィードからニュースを取得
+async function fetchNewsFromRSS(url, sourceName) {
   try {
-    console.log(`Fetching RSS feed: ${url}`);
-    const response = await fetch(url);
+    console.log(`📡 ${sourceName} からニュース取得中...`);
     
+    const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
     const xml = await response.text();
-    console.log(`RSS feed fetched successfully, length: ${xml.length} characters`);
+    console.log(`✓ ${sourceName}: ${xml.length}文字取得`);
     
-    // 簡単なXMLパース（実際のプロダクションではxml2jsなどのライブラリを使用推奨）
+    // 簡単なXMLパース
     const items = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
     
     while ((match = itemRegex.exec(xml)) !== null) {
       const itemXml = match[1];
+      
+      // タイトル取得
       const titleMatch = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/);
       const linkMatch = itemXml.match(/<link>(.*?)<\/link>/);
       const pubDateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/);
       const descriptionMatch = itemXml.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>(.*?)<\/description>/);
       
       if (titleMatch && linkMatch) {
-        const title = titleMatch[1] || titleMatch[2];
-        const link = linkMatch[1];
+        const title = (titleMatch[1] || titleMatch[2] || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        const link = linkMatch[1].trim();
         const pubDate = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
-        const description = descriptionMatch ? (descriptionMatch[1] || descriptionMatch[2]) : '';
+        const description = (descriptionMatch ? (descriptionMatch[1] || descriptionMatch[2]) : '').replace(/<[^>]*>/g, '').substring(0, 150);
         
         items.push({
-          title: title.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
-          link: link.trim(),
+          title,
+          link,
           pubDate,
-          description: description.replace(/<[^>]*>/g, '').substring(0, 200)
+          description,
+          source: sourceName
         });
       }
     }
     
-    console.log(`Parsed ${items.length} items from ${url}`);
+    console.log(`✓ ${sourceName}: ${items.length}件の記事を取得`);
     return items;
   } catch (error) {
-    console.error(`Error parsing RSS feed ${url}:`, error);
-    console.error(`Error details:`, error.message);
+    console.error(`❌ ${sourceName} の取得に失敗:`, error.message);
     return [];
   }
 }
 
-// ニュースがAI関連かどうかを判定
+// AI関連かどうかを判定
 function isAIRelated(title, description) {
   const text = `${title} ${description}`.toLowerCase();
   return AI_KEYWORDS.some(keyword => text.includes(keyword.toLowerCase()));
 }
 
-// 時間範囲内のニュースをフィルタリング
-function filterNewsByTime(newsItems, hoursBack = 24) {
+// 過去24時間のニュースをフィルタリング
+function filterRecentNews(newsItems) {
   const now = new Date();
-  const cutoffTime = new Date(now.getTime() - (hoursBack * 60 * 60 * 1000));
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   
   return newsItems.filter(item => {
     const pubDate = new Date(item.pubDate);
-    return pubDate >= cutoffTime;
+    return pubDate >= yesterday;
   });
 }
 
@@ -125,61 +140,69 @@ function scoreNews(newsItem) {
     if (text.includes(keyword.toLowerCase())) score += 2;
   });
   
-  // タイトルに含まれる場合はボーナス
-  if (newsItem.title.toLowerCase().includes('ai')) score += 5;
-  
   return score;
 }
 
-// ニュースを取得するメイン関数
-async function fetchAINews() {
-  console.log('Fetching AI news...');
-  
-  const allNews = [];
-  
-  // RSSフィードからニュースを取得
-  for (const source of NEWS_SOURCES) {
-    if (source.type === 'rss') {
-      console.log(`Fetching from ${source.name}...`);
-      const items = await parseRSS(source.url);
-      
-      items.forEach(item => {
-        if (isAIRelated(item.title, item.description)) {
-          allNews.push({
-            ...item,
-            source: source.name,
-            score: scoreNews(item)
-          });
-        }
-      });
+// メイン処理
+async function main() {
+  try {
+    console.log('🚀 AIニュース収集開始...');
+    
+    // 全ソースからニュースを取得
+    const allNews = [];
+    for (const source of NEWS_SOURCES) {
+      const news = await fetchNewsFromRSS(source.url, source.name);
+      allNews.push(...news);
     }
+    
+    console.log(`📊 合計 ${allNews.length} 件のニュースを取得`);
+    
+    // AI関連のニュースをフィルタリング
+    const aiNews = allNews.filter(item => isAIRelated(item.title, item.description));
+    console.log(`🤖 AI関連ニュース: ${aiNews.length} 件`);
+    
+    // 過去24時間のニュースをフィルタリング
+    const recentNews = filterRecentNews(aiNews);
+    console.log(`⏰ 過去24時間のAIニュース: ${recentNews.length} 件`);
+    
+    // スコアリングしてソート
+    const scoredNews = recentNews.map(item => ({
+      ...item,
+      score: scoreNews(item)
+    })).sort((a, b) => b.score - a.score);
+    
+    // トップ3を選択
+    const topNews = scoredNews.slice(0, 3);
+    console.log(`📈 トップ3のニュースを選択`);
+    
+    // Slackに送信
+    await sendToSlack(topNews);
+    
+    console.log('✅ AIニュース収集・送信完了');
+  } catch (error) {
+    console.error('❌ エラーが発生しました:', error);
+    
+    // エラー時もSlackに通知
+    try {
+      await slack.chat.postMessage({
+        channel: SLACK_CHANNEL_ID,
+        text: `⚠️ AIニュースボットでエラーが発生しました\n\`\`\`${error.message}\`\`\``
+      });
+    } catch (slackError) {
+      console.error('❌ Slackエラー通知も失敗:', slackError.message);
+    }
+    
+    process.exit(1);
   }
-  
-  // 時間範囲でフィルタリング（過去24時間）
-  const recentNews = filterNewsByTime(allNews, 24);
-  
-  // スコア順でソート
-  recentNews.sort((a, b) => b.score - a.score);
-  
-  // トップ3を返す
-  return recentNews.slice(0, 3);
 }
 
 // Slackにメッセージを送信
 async function sendToSlack(newsItems) {
-  if (!process.env.SLACK_BOT_TOKEN) {
-    console.error('SLACK_BOT_TOKEN is not set');
-    return;
-  }
-  
-  if (!CHANNEL_ID || CHANNEL_ID === '#aiニュース') {
-    console.error('SLACK_CHANNEL_ID is not properly set. Please set the actual channel ID (e.g., C0123456789)');
-    return;
-  }
+  console.log(`📤 Slackに送信中... (チャンネル: ${SLACK_CHANNEL_ID})`);
   
   if (newsItems.length === 0) {
     const message = {
-      channel: CHANNEL_ID,
+      channel: SLACK_CHANNEL_ID,
       text: "🤖 AIニュースまとめ",
       blocks: [
         {
@@ -192,7 +215,8 @@ async function sendToSlack(newsItems) {
       ]
     };
     
-    await client.chat.postMessage(message);
+    const result = await slack.chat.postMessage(message);
+    console.log('✓ メッセージ送信完了 (ニュースなし)');
     return;
   }
   
@@ -226,56 +250,15 @@ async function sendToSlack(newsItems) {
   });
   
   const message = {
-    channel: CHANNEL_ID,
+    channel: SLACK_CHANNEL_ID,
     text: `AIニュースまとめ - ${format(new Date(), 'yyyy年MM月dd日')}`,
     blocks: blocks
   };
   
-  try {
-    await client.chat.postMessage(message);
-    console.log('Successfully sent AI news to Slack');
-  } catch (error) {
-    console.error('Error sending message to Slack:', error);
-  }
+  const result = await slack.chat.postMessage(message);
+  console.log('✓ メッセージ送信完了');
+  console.log(`📊 送信したニュース数: ${newsItems.length}件`);
 }
 
-// メイン実行関数
-async function main() {
-  try {
-    console.log('Starting AI news collection...');
-    console.log('Environment check:');
-    console.log('- SLACK_BOT_TOKEN:', process.env.SLACK_BOT_TOKEN ? 'SET' : 'NOT SET');
-    console.log('- SLACK_CHANNEL_ID:', process.env.SLACK_CHANNEL_ID || 'NOT SET');
-    console.log('- TZ:', process.env.TZ || 'NOT SET');
-    
-    const newsItems = await fetchAINews();
-    console.log(`Found ${newsItems.length} relevant AI news items`);
-    
-    if (newsItems.length > 0) {
-      console.log('Sample news item:', JSON.stringify(newsItems[0], null, 2));
-    }
-    
-    await sendToSlack(newsItems);
-    console.log('AI news delivery completed');
-  } catch (error) {
-    console.error('Error in main execution:', error);
-    console.error('Error stack:', error.stack);
-    
-    // エラー時にもSlackに通知
-    try {
-      await client.chat.postMessage({
-        channel: CHANNEL_ID,
-        text: `⚠️ AIニュース取得でエラーが発生しました: ${error.message}`
-      });
-    } catch (slackError) {
-      console.error('Error sending error message to Slack:', slackError);
-    }
-  }
-}
-
-// スクリプトが直接実行された場合のみmainを実行
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
-
-export { main, fetchAINews, sendToSlack };
+// スクリプト実行
+main();

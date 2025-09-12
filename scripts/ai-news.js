@@ -2,7 +2,7 @@ import { WebClient } from '@slack/web-api';
 import { format, subDays, subHours } from 'date-fns';
 
 const client = new WebClient(process.env.SLACK_BOT_TOKEN);
-const CHANNEL_ID = process.env.SLACK_CHANNEL_ID || '#aiニュース';
+const CHANNEL_ID = process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_ID_AI_NEWS || '#aiニュース';
 const TZ = 'Asia/Tokyo';
 
 // AI関連のキーワード
@@ -167,6 +167,16 @@ async function fetchAINews() {
 
 // Slackにメッセージを送信
 async function sendToSlack(newsItems) {
+  if (!process.env.SLACK_BOT_TOKEN) {
+    console.error('SLACK_BOT_TOKEN is not set');
+    return;
+  }
+  
+  if (!CHANNEL_ID || CHANNEL_ID === '#aiニュース') {
+    console.error('SLACK_CHANNEL_ID is not properly set. Please set the actual channel ID (e.g., C0123456789)');
+    return;
+  }
+  
   if (newsItems.length === 0) {
     const message = {
       channel: CHANNEL_ID,

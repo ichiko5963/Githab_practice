@@ -1,6 +1,5 @@
 import { WebClient } from '@slack/web-api';
 import { format, subDays, subHours } from 'date-fns';
-import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
 
 const client = new WebClient(process.env.SLACK_BOT_TOKEN);
 const CHANNEL_ID = process.env.SLACK_CHANNEL_ID || '#aiニュース';

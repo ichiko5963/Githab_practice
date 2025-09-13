@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 // 設定
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
+const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY;
 const TZ = 'Asia/Tokyo';
 
 // デバッグ情報を出力
@@ -11,6 +12,7 @@ console.log('=== AI News Bot 開始 ===');
 console.log('環境変数チェック:');
 console.log('- SLACK_BOT_TOKEN:', SLACK_BOT_TOKEN ? '✓ 設定済み' : '✗ 未設定');
 console.log('- SLACK_CHANNEL_ID:', SLACK_CHANNEL_ID || '✗ 未設定');
+console.log('- GOOGLE_TRANSLATE_API_KEY:', GOOGLE_TRANSLATE_API_KEY ? '✓ 設定済み' : '✗ 未設定');
 console.log('- TZ:', TZ);
 
 // 必須環境変数のチェック
@@ -36,8 +38,50 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// 翻訳関数（強化版）
-function translateToJapanese(text) {
+// Google Translate APIを使った翻訳関数
+async function translateToJapanese(text) {
+  if (!text) return '';
+  
+  // Google Translate APIキーが設定されていない場合は従来の翻訳を使用
+  if (!GOOGLE_TRANSLATE_API_KEY) {
+    console.log('⚠️ Google Translate APIキーが未設定のため、簡易翻訳を使用');
+    return translateToJapaneseSimple(text);
+  }
+  
+  try {
+    console.log(`🌐 Google Translate APIで翻訳中: "${text.substring(0, 50)}..."`);
+    
+    const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${GOOGLE_TRANSLATE_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        q: text,
+        target: 'ja',
+        source: 'en'
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Google Translate API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const translatedText = data.data.translations[0].translatedText;
+    
+    console.log(`✓ 翻訳完了: "${translatedText.substring(0, 50)}..."`);
+    return translatedText;
+    
+  } catch (error) {
+    console.error('❌ Google Translate API翻訳エラー:', error.message);
+    console.log('🔄 簡易翻訳にフォールバック');
+    return translateToJapaneseSimple(text);
+  }
+}
+
+// 簡易翻訳関数（フォールバック用）
+function translateToJapaneseSimple(text) {
   if (!text) return '';
   
   // 基本的な翻訳マッピング
@@ -373,18 +417,20 @@ async function sendToSlack(newsItems) {
   }
   
   // ニュースアイテムを翻訳
-  const translatedNews = newsItems.map((news, index) => {
-    const translatedTitle = translateToJapanese(news.title);
-    const translatedDescription = translateToJapanese(news.description);
+  const translatedNews = [];
+  for (let i = 0; i < newsItems.length; i++) {
+    const news = newsItems[i];
+    const translatedTitle = await translateToJapanese(news.title);
+    const translatedDescription = await translateToJapanese(news.description);
     
-    console.log(`🔄 翻訳 ${index + 1}: ${news.title} → ${translatedTitle}`);
+    console.log(`🔄 翻訳 ${i + 1}: ${news.title} → ${translatedTitle}`);
     
-    return {
+    translatedNews.push({
       ...news,
       title: translatedTitle,
       description: translatedDescription
-    };
-  });
+    });
+  }
   
   // 指定された形式でメッセージを作成
   let messageText = `【${today}】のAIニュース\n\n`;

@@ -1,4 +1,5 @@
 import { WebClient } from '@slack/web-api';
+import express from 'express';
 
 // 設定
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
@@ -136,8 +137,6 @@ async function handleSlackEvent(event) {
 }
 
 // Express.jsサーバーを起動してSlackイベントを受信
-import express from 'express';
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 

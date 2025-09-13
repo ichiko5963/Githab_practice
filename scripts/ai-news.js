@@ -38,21 +38,21 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// OpenAI APIを使った翻訳関数
-async function translateToJapanese(text) {
-  if (!text) return '';
+// OpenAI APIを使った記事要約関数
+async function summarizeToJapanese(title, description) {
+  if (!title && !description) return '';
   
   // OpenAI APIキーが設定されていない場合は英語のまま返す
   if (!OPENAI_API_KEY) {
     console.log('⚠️ OpenAI APIキーが未設定のため、英語のまま使用');
-    return text;
+    return `${title}\n${description}`;
   }
   
   try {
-    console.log(`🤖 OpenAI APIで翻訳中: "${text.substring(0, 50)}..."`);
+    console.log(`🤖 OpenAI APIで要約中: "${title.substring(0, 50)}..."`);
     
     // テキストをクリーニング（HTMLタグや特殊文字を除去）
-    const cleanText = text
+    const cleanTitle = title
       .replace(/<[^>]*>/g, '') // HTMLタグを除去
       .replace(/&#8217;/g, "'") // HTMLエンティティをデコード
       .replace(/&#8216;/g, "'")
@@ -60,6 +60,16 @@ async function translateToJapanese(text) {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/\s+/g, ' ') // 複数スペースを単一に
+      .trim();
+    
+    const cleanDescription = description
+      .replace(/<[^>]*>/g, '')
+      .replace(/&#8217;/g, "'")
+      .replace(/&#8216;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
       .trim();
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -73,14 +83,14 @@ async function translateToJapanese(text) {
         messages: [
           {
             role: 'system',
-            content: 'あなたは英語から日本語への翻訳専門家です。ニュース記事のタイトルと説明を自然で読みやすい日本語に翻訳してください。技術用語は適切に日本語化し、文脈に応じて自然な表現を使用してください。'
+            content: 'あなたはAIニュースの要約専門家です。英語のニュース記事のタイトルと説明を、日本人にとって分かりやすい一言要約にしてください。技術的な内容も一般の人に理解しやすい表現で、簡潔で魅力的な要約を作成してください。'
           },
           {
             role: 'user',
-            content: `以下の英語のテキストを自然な日本語に翻訳してください：\n\n${cleanText}`
+            content: `以下のAI関連ニュースを一言で分かりやすく要約してください：\n\nタイトル: ${cleanTitle}\n\n説明: ${cleanDescription}`
           }
         ],
-        max_tokens: 500,
+        max_tokens: 200,
         temperature: 0.3
       })
     });
@@ -90,15 +100,15 @@ async function translateToJapanese(text) {
     }
     
     const data = await response.json();
-    const translatedText = data.choices[0].message.content.trim();
+    const summary = data.choices[0].message.content.trim();
     
-    console.log(`✓ 翻訳完了: "${translatedText.substring(0, 50)}..."`);
-    return translatedText;
+    console.log(`✓ 要約完了: "${summary.substring(0, 50)}..."`);
+    return summary;
     
   } catch (error) {
-    console.error('❌ OpenAI API翻訳エラー:', error.message);
+    console.error('❌ OpenAI API要約エラー:', error.message);
     console.log('🔄 英語のまま使用');
-    return text;
+    return `${title}\n${description}`;
   }
 }
 
@@ -290,29 +300,26 @@ async function sendToSlack(newsItems) {
     return;
   }
   
-  // ニュースアイテムを翻訳
-  const translatedNews = [];
+  // ニュースアイテムを要約
+  const summarizedNews = [];
   for (let i = 0; i < newsItems.length; i++) {
     const news = newsItems[i];
-    const translatedTitle = await translateToJapanese(news.title);
-    const translatedDescription = await translateToJapanese(news.description);
+    const summary = await summarizeToJapanese(news.title, news.description);
     
-    console.log(`🔄 翻訳 ${i + 1}: ${news.title} → ${translatedTitle}`);
+    console.log(`🔄 要約 ${i + 1}: ${news.title} → ${summary}`);
     
-    translatedNews.push({
+    summarizedNews.push({
       ...news,
-      title: translatedTitle,
-      description: translatedDescription
+      summary: summary
     });
   }
   
   // 指定された形式でメッセージを作成
   let messageText = `【${today}】のAIニュース\n\n`;
   
-  translatedNews.forEach((news, index) => {
+  summarizedNews.forEach((news, index) => {
     const emoji = ['①', '②', '③'][index] || `${index + 1}.`;
-    messageText += `${emoji} ${news.title}\n`;
-    messageText += `${news.description}\n`;
+    messageText += `${emoji} ${news.summary}\n`;
     messageText += `<${news.link}|記事を読む> | 📰 ${news.source}\n\n`;
   });
   
@@ -335,7 +342,7 @@ async function sendToSlack(newsItems) {
   const result = await slack.chat.postMessage(message);
   console.log('✓ メッセージ送信完了');
   console.log(`📊 送信したニュース数: ${newsItems.length}件`);
-  console.log('🌏 日本語翻訳済み');
+  console.log('📝 日本語要約済み');
 }
 
 // スクリプト実行

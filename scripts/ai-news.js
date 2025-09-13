@@ -38,14 +38,14 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// Google Translate APIを使った翻訳関数（改善版）
+// Google Translate APIを使った翻訳関数
 async function translateToJapanese(text) {
   if (!text) return '';
   
-  // Google Translate APIキーが設定されていない場合は従来の翻訳を使用
+  // Google Translate APIキーが設定されていない場合は英語のまま返す
   if (!GOOGLE_TRANSLATE_API_KEY) {
-    console.log('⚠️ Google Translate APIキーが未設定のため、簡易翻訳を使用');
-    return translateToJapaneseSimple(text);
+    console.log('⚠️ Google Translate APIキーが未設定のため、英語のまま使用');
+    return text;
   }
   
   try {
@@ -87,161 +87,12 @@ async function translateToJapanese(text) {
     
   } catch (error) {
     console.error('❌ Google Translate API翻訳エラー:', error.message);
-    console.log('🔄 簡易翻訳にフォールバック');
-    return translateToJapaneseSimple(text);
+    console.log('🔄 英語のまま使用');
+    return text;
   }
 }
 
 
-// 簡易翻訳関数（フォールバック用）
-function translateToJapaneseSimple(text) {
-  if (!text) return '';
-  
-  // 基本的な翻訳マッピング
-  const translations = {
-    // AI関連用語
-    'artificial intelligence': '人工知能',
-    'machine learning': '機械学習',
-    'deep learning': '深層学習',
-    'neural network': 'ニューラルネットワーク',
-    'large language model': '大規模言語モデル',
-    'generative AI': '生成AI',
-    'computer vision': 'コンピュータビジョン',
-    'natural language processing': '自然言語処理',
-    'robotics': 'ロボティクス',
-    'automation': '自動化',
-    'startups': 'スタートアップ',
-    'startup': 'スタートアップ',
-    
-    // 企業名・サービス名
-    'OpenAI': 'OpenAI',
-    'ChatGPT': 'ChatGPT',
-    'Claude': 'Claude',
-    'Gemini': 'Gemini',
-    'Google AI': 'Google AI',
-    'Anthropic': 'Anthropic',
-    'Microsoft': 'Microsoft',
-    'Google': 'Google',
-    'Meta': 'Meta',
-    'Apple': 'Apple',
-    'Oracle': 'Oracle',
-    'People': 'People',
-    
-    // 技術用語
-    'update': 'アップデート',
-    'release': 'リリース',
-    'feature': '機能',
-    'breakthrough': 'ブレークスルー',
-    'innovation': 'イノベーション',
-    'algorithm': 'アルゴリズム',
-    'model': 'モデル',
-    'training': 'トレーニング',
-    'dataset': 'データセット',
-    'API': 'API',
-    
-    // 動詞
-    'announces': '発表',
-    'launches': 'ローンチ',
-    'introduces': '導入',
-    'develops': '開発',
-    'creates': '作成',
-    'builds': '構築',
-    'entering': '突入',
-    'enters': '突入',
-    'says': '発言',
-    'accusing': '告発',
-    'stealing': '盗用',
-    'caught': '驚かせた',
-    'surprise': '驚き',
-    
-    // 形容詞
-    'new': '新しい',
-    'latest': '最新の',
-    'golden': '黄金',
-    'bad': '悪質な',
-    
-    // 名詞
-    'research': '研究',
-    'study': '研究',
-    'technology': '技術',
-    'platform': 'プラットフォーム',
-    'tool': 'ツール',
-    'system': 'システム',
-    'application': 'アプリケーション',
-    'software': 'ソフトウェア',
-    'hardware': 'ハードウェア',
-    'company': '企業',
-    'deal': '契約',
-    'age': '時代',
-    'actor': '行為者',
-    'content': 'コンテンツ',
-    'Wall Street': 'ウォール街',
-    
-    // 前置詞・接続詞
-    'why': 'なぜ',
-    'because': 'なぜなら',
-    'just': '単に',
-    'and': 'そして',
-    'not': 'ない',
-    'of': 'の',
-    'by': 'によって',
-    'to': 'に',
-    'from': 'から',
-    'with': 'と',
-    'in': 'で',
-    'on': 'で',
-    'at': 'で',
-    'for': 'のために',
-    'is': 'である',
-    'are': 'である',
-    'was': 'だった',
-    'were': 'だった',
-    'the': '',
-    'a': '',
-    'an': ''
-  };
-  
-  let translatedText = text;
-  
-  // HTMLエンティティをデコード
-  translatedText = translatedText
-    .replace(/&#8217;/g, "'")
-    .replace(/&#8216;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-  
-  // 翻訳マッピングを適用（長いフレーズから順番に）
-  const sortedEntries = Object.entries(translations).sort((a, b) => b[0].length - a[0].length);
-  
-  sortedEntries.forEach(([english, japanese]) => {
-    if (japanese === '') {
-      // 空文字列の場合は単語境界で削除
-      const regex = new RegExp(`\\b${english}\\b`, 'gi');
-      translatedText = translatedText.replace(regex, '');
-    } else {
-      const regex = new RegExp(`\\b${english}\\b`, 'gi');
-      translatedText = translatedText.replace(regex, japanese);
-    }
-  });
-  
-  // 複数スペースを単一スペースに
-  translatedText = translatedText.replace(/\s+/g, ' ').trim();
-  
-  // 特定のパターンを日本語風に調整
-  translatedText = translatedText
-    .replace(/Oracle：OpenAI/g, 'OracleとOpenAIの')
-    .replace(/golden age of ロボティクス/g, 'ロボティクスの黄金時代')
-    .replace(/We are entering/g, '突入している')
-    .replace(/robotics startups/g, 'ロボティクススタートアップ')
-    .replace(/not just because of AI/g, 'AIだけが理由ではない')
-    .replace(/Google is a/g, 'Googleは')
-    .replace(/bad actor/g, '悪質な行為者')
-    .replace(/says People CEO/g, 'とPeople CEOが発言')
-    .replace(/accusing the company of stealing content/g, '企業のコンテンツ盗用を告発');
-  
-  return translatedText;
-}
 
 // ニュースソース（信頼できるRSSフィード）
 const NEWS_SOURCES = [

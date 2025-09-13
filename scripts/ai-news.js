@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 // 設定
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
-const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const TZ = 'Asia/Tokyo';
 
 // デバッグ情報を出力
@@ -12,7 +12,7 @@ console.log('=== AI News Bot 開始 ===');
 console.log('環境変数チェック:');
 console.log('- SLACK_BOT_TOKEN:', SLACK_BOT_TOKEN ? '✓ 設定済み' : '✗ 未設定');
 console.log('- SLACK_CHANNEL_ID:', SLACK_CHANNEL_ID || '✗ 未設定');
-console.log('- GOOGLE_TRANSLATE_API_KEY:', GOOGLE_TRANSLATE_API_KEY ? '✓ 設定済み' : '✗ 未設定');
+console.log('- OPENAI_API_KEY:', OPENAI_API_KEY ? '✓ 設定済み' : '✗ 未設定');
 console.log('- TZ:', TZ);
 
 // 必須環境変数のチェック
@@ -38,18 +38,18 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// Google Translate APIを使った翻訳関数
+// OpenAI APIを使った翻訳関数
 async function translateToJapanese(text) {
   if (!text) return '';
   
-  // Google Translate APIキーが設定されていない場合は英語のまま返す
-  if (!GOOGLE_TRANSLATE_API_KEY) {
-    console.log('⚠️ Google Translate APIキーが未設定のため、英語のまま使用');
+  // OpenAI APIキーが設定されていない場合は英語のまま返す
+  if (!OPENAI_API_KEY) {
+    console.log('⚠️ OpenAI APIキーが未設定のため、英語のまま使用');
     return text;
   }
   
   try {
-    console.log(`🌐 Google Translate APIで翻訳中: "${text.substring(0, 50)}..."`);
+    console.log(`🤖 OpenAI APIで翻訳中: "${text.substring(0, 50)}..."`);
     
     // テキストをクリーニング（HTMLタグや特殊文字を除去）
     const cleanText = text
@@ -62,31 +62,41 @@ async function translateToJapanese(text) {
       .replace(/\s+/g, ' ') // 複数スペースを単一に
       .trim();
     
-    const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${GOOGLE_TRANSLATE_API_KEY}`, {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        q: cleanText,
-        target: 'ja',
-        source: 'en',
-        format: 'text'
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたは英語から日本語への翻訳専門家です。ニュース記事のタイトルと説明を自然で読みやすい日本語に翻訳してください。技術用語は適切に日本語化し、文脈に応じて自然な表現を使用してください。'
+          },
+          {
+            role: 'user',
+            content: `以下の英語のテキストを自然な日本語に翻訳してください：\n\n${cleanText}`
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.3
       })
     });
     
     if (!response.ok) {
-      throw new Error(`Google Translate API error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
     
     const data = await response.json();
-    const translatedText = data.data.translations[0].translatedText;
+    const translatedText = data.choices[0].message.content.trim();
     
     console.log(`✓ 翻訳完了: "${translatedText.substring(0, 50)}..."`);
     return translatedText;
     
   } catch (error) {
-    console.error('❌ Google Translate API翻訳エラー:', error.message);
+    console.error('❌ OpenAI API翻訳エラー:', error.message);
     console.log('🔄 英語のまま使用');
     return text;
   }

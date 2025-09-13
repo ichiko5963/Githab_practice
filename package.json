@@ -10,10 +10,9 @@
     "lint": "echo 'No linter configured'"
   },
   "dependencies": {
+    "@google-cloud/translate": "^9.2.0",
     "@slack/web-api": "^7.0.4",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0"
   }
 }
-
-

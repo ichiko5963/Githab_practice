@@ -53,46 +53,32 @@ const AI_KEYWORDS = [
   '画像生成', 'テキスト生成', '音声合成', '翻訳', '推薦', '予測', '分析'
 ];
 
-// OpenAI APIを使った記事要約関数
-async function summarizeToJapanese(title, description) {
-  if (!title && !description) return '';
-  
-  // 日本語の記事の場合はそのまま返す
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(title + description);
-  if (isJapanese) {
-    console.log(`🇯🇵 日本語記事のため要約スキップ: "${title.substring(0, 50)}..."`);
-    return `${title}`;
+// リュウクルがAIニュースを紹介する関数
+async function createRyuukuruNews(newsItems) {
+  if (!newsItems || newsItems.length === 0) {
+    return `リュウクル参上！！🐲🔥\n今日は残念ながらAIニュースがなかったぞ...\nオイラ、明日も7時にちゃんと拾ってくるから楽しみにしててくれよな🔥`;
   }
   
-  // OpenAI APIキーが設定されていない場合は英語のまま返す
+  // OpenAI APIキーが設定されていない場合はシンプルな形式で返す
   if (!OPENAI_API_KEY) {
-    console.log('⚠️ OpenAI APIキーが未設定のため、英語のまま使用');
-    return `${title}`;
+    console.log('⚠️ OpenAI APIキーが未設定のため、シンプルな形式で使用');
+    let message = `リュウクル参上！！🐲🔥\n今日のAIニュースを${newsItems.length}本立てで紹介するぞ！\n\n`;
+    newsItems.forEach((news, index) => {
+      const emoji = ['①', '②', '③'][index] || `${index + 1}.`;
+      message += `${emoji} ${news.title}\n`;
+    });
+    message += `\n以上、リュウクルのAIニュース速報でした！\nオイラ、明日も7時にちゃんと拾ってくるから楽しみにしててくれよな🔥`;
+    return message;
   }
   
   try {
-    console.log(`🤖 OpenAI APIで要約中: "${title.substring(0, 50)}..."`);
+    console.log(`🤖 リュウクルがAIニュースを紹介中...`);
     
-    // テキストをクリーニング（HTMLタグや特殊文字を除去）
-    const cleanTitle = title
-      .replace(/<[^>]*>/g, '') // HTMLタグを除去
-      .replace(/&#8217;/g, "'") // HTMLエンティティをデコード
-      .replace(/&#8216;/g, "'")
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\s+/g, ' ') // 複数スペースを単一に
-      .trim();
-    
-    const cleanDescription = description
-      .replace(/<[^>]*>/g, '')
-      .replace(/&#8217;/g, "'")
-      .replace(/&#8216;/g, "'")
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\s+/g, ' ')
-      .trim();
+    // ニュース情報を整理
+    const newsData = newsItems.slice(0, 3).map(news => ({
+      title: news.title.replace(/<[^>]*>/g, '').replace(/&#8217;/g, "'").replace(/&#8216;/g, "'").replace(/&amp;/g, '&').trim(),
+      description: news.description.replace(/<[^>]*>/g, '').replace(/&#8217;/g, "'").replace(/&#8216;/g, "'").replace(/&amp;/g, '&').trim()
+    }));
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -105,15 +91,40 @@ async function summarizeToJapanese(title, description) {
         messages: [
           {
             role: 'system',
-            content: 'あなたはAIニュースの要約専門家です。英語のニュース記事のタイトルと説明を、日本人にとって分かりやすい一言要約にしてください。技術的な内容も一般の人に理解しやすい表現で、簡潔で魅力的な要約を作成してください。'
+            content: `あなたはAirCleの公式マスコット「リュウクル」です。
+キャラクター設定：お調子者でユーモアたっぷり、元気でフレンドリーな小さなドラゴン。
+口癖：「参上！」「オイラ」「だぞ🔥」などを使って親しみやすい雰囲気を出す。
+役割：AIニュースを3つ紹介し、それぞれ「なぜ注目すべきニュースなのか」を簡潔に説明する。
+
+【出力フォーマット】
+「リュウクル参上！！🐲🔥
+今日のAIニュースを3本立てで紹介するぞ！
+
+① [ニュース1のタイトル]
+👉 これは[理由：なぜ注目すべきか]だから超アツいんだ！
+
+② [ニュース2のタイトル]
+👉 これは[理由]だから見逃せないぞ！
+
+③ [ニュース3のタイトル]
+👉 これは[理由]だから要チェックなんだ！
+
+以上、リュウクルのAIニュース速報でした！
+オイラ、明日も7時にちゃんと拾ってくるから楽しみにしててくれよな🔥」
+
+条件：
+- 毎回同じテンション・口調（お調子者＆ユーモア系）で出力すること。
+- ニュースは3つに限定すること。
+- 各ニュースの「注目ポイント」を1行でわかりやすく説明すること。
+- 難しい言葉は避けて、誰でも理解できる言葉で言う。`
           },
           {
             role: 'user',
-            content: `以下のAI関連ニュースを一言で分かりやすく要約してください：\n\nタイトル: ${cleanTitle}\n\n説明: ${cleanDescription}`
+            content: `以下のAIニュースをリュウクルとして紹介してください：\n\n${newsData.map((news, index) => `${index + 1}. ${news.title}\n   ${news.description}`).join('\n\n')}`
           }
         ],
-        max_tokens: 200,
-        temperature: 0.3
+        max_tokens: 800,
+        temperature: 0.7
       })
     });
     
@@ -122,15 +133,22 @@ async function summarizeToJapanese(title, description) {
     }
     
     const data = await response.json();
-    const summary = data.choices[0].message.content.trim();
+    const ryuukuruMessage = data.choices[0].message.content.trim();
     
-    console.log(`✓ 要約完了: "${summary.substring(0, 50)}..."`);
-    return summary;
+    console.log(`✓ リュウクルメッセージ作成完了`);
+    return ryuukuruMessage;
     
   } catch (error) {
-    console.error('❌ OpenAI API要約エラー:', error.message);
-    console.log('🔄 英語のまま使用');
-    return `${title}`;
+    console.error('❌ OpenAI APIエラー:', error.message);
+    console.log('🔄 シンプルな形式で使用');
+    
+    let message = `リュウクル参上！！🐲🔥\n今日のAIニュースを${newsItems.length}本立てで紹介するぞ！\n\n`;
+    newsItems.slice(0, 3).forEach((news, index) => {
+      const emoji = ['①', '②', '③'][index] || `${index + 1}.`;
+      message += `${emoji} ${news.title}\n`;
+    });
+    message += `\n以上、リュウクルのAIニュース速報でした！\nオイラ、明日も7時にちゃんと拾ってくるから楽しみにしててくれよな🔥`;
+    return message;
   }
 }
 
@@ -344,27 +362,15 @@ async function sendToSlack(newsItems) {
     return;
   }
   
-  // ニュースアイテムを要約
-  const summarizedNews = [];
-  for (let i = 0; i < newsItems.length; i++) {
-    const news = newsItems[i];
-    const summary = await summarizeToJapanese(news.title, news.description);
-    
-    console.log(`🔄 要約 ${i + 1}: ${news.title} → ${summary}`);
-    
-    summarizedNews.push({
-      ...news,
-      summary: summary
-    });
-  }
+  // リュウクルがAIニュースを紹介
+  const ryuukuruMessage = await createRyuukuruNews(newsItems);
   
-  // 指定された形式でメッセージを作成
-  let messageText = `【${today}】のAIニュース\n\n`;
-  
-  summarizedNews.forEach((news, index) => {
+  // 記事リンクを追加
+  let messageText = ryuukuruMessage + '\n\n';
+  messageText += '📰 記事リンク:\n';
+  newsItems.slice(0, 3).forEach((news, index) => {
     const emoji = ['①', '②', '③'][index] || `${index + 1}.`;
-    messageText += `${emoji} ${news.summary}\n`;
-    messageText += `<${news.link}|記事を読む> | 📰 ${news.source}\n\n`;
+    messageText += `${emoji} <${news.link}|${news.source}>\n`;
   });
   
   const blocks = [
@@ -379,14 +385,14 @@ async function sendToSlack(newsItems) {
   
   const message = {
     channel: SLACK_CHANNEL_ID,
-    text: `【${today}】のAIニュース`,
+    text: `リュウクルのAIニュース速報`,
     blocks: blocks
   };
   
   const result = await slack.chat.postMessage(message);
-  console.log('✓ メッセージ送信完了');
+  console.log('✓ リュウクルメッセージ送信完了');
   console.log(`📊 送信したニュース数: ${newsItems.length}件`);
-  console.log('📝 日本語要約済み');
+  console.log('🐲 リュウクルキャラクターで紹介済み');
 }
 
 // スクリプト実行

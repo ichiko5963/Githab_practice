@@ -29,23 +29,39 @@ if (!SLACK_CHANNEL_ID) {
 // Slackクライアント初期化
 const slack = new WebClient(SLACK_BOT_TOKEN);
 
-// AI関連のキーワード
+// AI関連のキーワード（日本語と英語）
 const AI_KEYWORDS = [
+  // 英語キーワード
   'AI', 'artificial intelligence', 'machine learning', 'deep learning',
   'GPT', 'ChatGPT', 'Claude', 'Gemini', 'OpenAI', 'Anthropic', 'Google AI',
   'neural network', 'LLM', 'large language model', 'generative AI',
   'computer vision', 'NLP', 'natural language processing',
-  'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
+  'robotics', 'automation', 'AI tool', 'AI update', 'AI feature',
+  // 日本語キーワード
+  '人工知能', '機械学習', '深層学習', 'ニューラルネットワーク',
+  '生成AI', '大規模言語モデル', '自然言語処理', 'コンピュータビジョン',
+  'ロボティクス', '自動化', 'AIツール', 'AI機能', 'AIアップデート',
+  // 日本のAI企業・サービス
+  'ソニー', 'ソフトバンク', 'NEC', '富士通', '日立', '東芝',
+  'リクルート', 'メルカリ', '楽天', 'サイバーエージェント',
+  'Preferred Networks', 'PFN', 'ABEJA', 'HACARUS'
 ];
 
 // OpenAI APIを使った記事要約関数
 async function summarizeToJapanese(title, description) {
   if (!title && !description) return '';
   
+  // 日本語の記事の場合はそのまま返す
+  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(title + description);
+  if (isJapanese) {
+    console.log(`🇯🇵 日本語記事のため要約スキップ: "${title.substring(0, 50)}..."`);
+    return `${title}`;
+  }
+  
   // OpenAI APIキーが設定されていない場合は英語のまま返す
   if (!OPENAI_API_KEY) {
     console.log('⚠️ OpenAI APIキーが未設定のため、英語のまま使用');
-    return `${title}\n${description}`;
+    return `${title}`;
   }
   
   try {
@@ -108,29 +124,39 @@ async function summarizeToJapanese(title, description) {
   } catch (error) {
     console.error('❌ OpenAI API要約エラー:', error.message);
     console.log('🔄 英語のまま使用');
-    return `${title}\n${description}`;
+    return `${title}`;
   }
 }
 
 
 
-// ニュースソース（信頼できるRSSフィード）
+// ニュースソース（日本のAIニュース中心）
 const NEWS_SOURCES = [
+  // 日本のAIニュース
+  {
+    name: 'ITmedia AI',
+    url: 'https://rss.itmedia.co.jp/rss/2.0/ait.xml'
+  },
+  {
+    name: 'Impress Watch AI',
+    url: 'https://www.watch.impress.co.jp/data/rss/1.0/ipw/feed.rdf'
+  },
+  {
+    name: '日経テクノロジー',
+    url: 'https://rss.nikkei.com/rss/nt/technology.xml'
+  },
+  {
+    name: 'ZDNet Japan AI',
+    url: 'https://japan.zdnet.com/rss/ai.xml'
+  },
+  // 海外の主要AIニュース（バランスのため）
   {
     name: 'TechCrunch AI',
     url: 'https://techcrunch.com/category/artificial-intelligence/feed/'
   },
   {
-    name: 'The Verge',
-    url: 'https://www.theverge.com/rss/index.xml'
-  },
-  {
     name: 'MIT Technology Review AI',
     url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed/'
-  },
-  {
-    name: 'Ars Technica',
-    url: 'https://feeds.arstechnica.com/arstechnica/index/'
   }
 ];
 

@@ -38,7 +38,7 @@ const AI_KEYWORDS = [
   'robotics', 'automation', 'AI tool', 'AI update', 'AI feature'
 ];
 
-// Google Translate APIを使った翻訳関数
+// Google Translate APIを使った翻訳関数（改善版）
 async function translateToJapanese(text) {
   if (!text) return '';
   
@@ -51,15 +51,27 @@ async function translateToJapanese(text) {
   try {
     console.log(`🌐 Google Translate APIで翻訳中: "${text.substring(0, 50)}..."`);
     
+    // テキストをクリーニング（HTMLタグや特殊文字を除去）
+    const cleanText = text
+      .replace(/<[^>]*>/g, '') // HTMLタグを除去
+      .replace(/&#8217;/g, "'") // HTMLエンティティをデコード
+      .replace(/&#8216;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ') // 複数スペースを単一に
+      .trim();
+    
     const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${GOOGLE_TRANSLATE_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        q: text,
+        q: cleanText,
         target: 'ja',
-        source: 'en'
+        source: 'en',
+        format: 'text'
       })
     });
     
@@ -68,7 +80,10 @@ async function translateToJapanese(text) {
     }
     
     const data = await response.json();
-    const translatedText = data.data.translations[0].translatedText;
+    let translatedText = data.data.translations[0].translatedText;
+    
+    // 翻訳結果を自然な日本語に調整
+    translatedText = improveJapaneseTranslation(translatedText);
     
     console.log(`✓ 翻訳完了: "${translatedText.substring(0, 50)}..."`);
     return translatedText;
@@ -78,6 +93,55 @@ async function translateToJapanese(text) {
     console.log('🔄 簡易翻訳にフォールバック');
     return translateToJapaneseSimple(text);
   }
+}
+
+// 翻訳結果を自然な日本語に調整する関数
+function improveJapaneseTranslation(text) {
+  if (!text) return '';
+  
+  let improvedText = text;
+  
+  // 不自然な翻訳を修正
+  const improvements = [
+    // 企業名・サービス名の修正
+    { from: /Oracle-OpenAI/g, to: 'OracleとOpenAIの' },
+    { from: /Oracle OpenAI/g, to: 'OracleとOpenAIの' },
+    { from: /Google AI/g, to: 'Google AI' },
+    { from: /ChatGPT/g, to: 'ChatGPT' },
+    { from: /Claude/g, to: 'Claude' },
+    { from: /Gemini/g, to: 'Gemini' },
+    
+    // 技術用語の修正
+    { from: /人工知能/g, to: 'AI' },
+    { from: /機械学習/g, to: '機械学習' },
+    { from: /深層学習/g, to: '深層学習' },
+    { from: /ニューラルネットワーク/g, to: 'ニューラルネットワーク' },
+    { from: /ロボティクス/g, to: 'ロボティクス' },
+    { from: /スタートアップ/g, to: 'スタートアップ' },
+    
+    // 文の自然さを改善
+    { from: /なぜ.*驚かせた.*ウォール街.*驚き/g, to: 'ウォール街を驚かせた理由' },
+    { from: /私たち.*突入.*黄金.*時代.*ロボティクス.*スタートアップ/g, to: 'ロボティクススタートアップの黄金時代に突入' },
+    { from: /Google.*悪質な.*行為者.*発言.*People CEO/g, to: 'Googleは「悪質な行為者」だとPeople CEOが発言' },
+    
+    // 不自然な助詞を修正
+    { from: /の の/g, to: 'の' },
+    { from: /で で/g, to: 'で' },
+    { from: /に に/g, to: 'に' },
+    { from: /を を/g, to: 'を' },
+    { from: /が が/g, to: 'が' },
+    { from: /は は/g, to: 'は' },
+    
+    // 余分なスペースを削除
+    { from: /\s+/g, to: ' ' },
+    { from: /^\s+|\s+$/g, to: '' }
+  ];
+  
+  improvements.forEach(({ from, to }) => {
+    improvedText = improvedText.replace(from, to);
+  });
+  
+  return improvedText.trim();
 }
 
 // 簡易翻訳関数（フォールバック用）

@@ -1,9 +1,10 @@
 Slack Automation Bot
 
-This repo contains two automation features:
+This repo contains three automation features:
 
 1. **Event Reminder Bot**: Sends a reminder in Slack 1 week before scheduled events posted in channel `#5-イベント企画`.
 2. **AI News Bot**: Automatically collects and sends AI-related news to Slack channel `#aiニュース` every morning at 7:00 JST.
+3. **Ryuukuru Mention Bot**: Responds to @Ryuukuru mentions in any Slack channel with the AirCle mascot character.
 
 ## Event Reminder Bot
 
@@ -71,9 +72,44 @@ The AI News Bot automatically collects the top 3 AI-related news from various so
 - `SLACK_CHANNEL_ID`: ID for `#5-イベント企画` (e.g., `C0123456789`).
 - For AI News: The bot will use the same `SLACK_CHANNEL_ID` secret, but you can override it by setting `SLACK_CHANNEL_ID` to the AI news channel ID.
 
+## Ryuukuru Mention Bot
+
+The Ryuukuru Mention Bot responds to @Ryuukuru mentions in any Slack channel with the AirCle mascot character "Ryuukuru".
+
+### Features
+- Responds to @Ryuukuru mentions in any channel
+- Uses OpenAI API for natural conversation
+- Maintains Ryuukuru's character (cheerful dragon with catchphrases)
+- Responds in thread to keep channels clean
+- Runs as a web server to receive Slack events
+
+### Character Setting
+- Small dragon mascot, cheerful and humorous
+- Always energetic and friendly
+- Uses catchphrases: "参上！", "オイラ", "〜だぞ🔥", "〜なんだ！"
+- Cute but reliable presence
+- Proud of running on GitHub
+
+### Slack App Setup
+1. Create a Slack app (bot) in your workspace.
+2. Scopes (Bot Token):
+   - `app_mentions:read` (receive mention events)
+   - `chat:write` (post messages)
+   - `channels:read` (read channel info)
+3. Enable Event Subscriptions:
+   - Request URL: `https://your-domain.com/slack/events`
+   - Subscribe to bot events: `app_mention`
+4. Install the app to the workspace.
+5. Get the Bot User OAuth Token (starts with `xoxb-...`).
+
+### GitHub Secrets
+- `SLACK_BOT_TOKEN`: Bot token from Slack (`xoxb-...`).
+- `OPENAI_API_KEY`: OpenAI API key for natural conversation.
+
 ### How it runs
 - **Event Reminder**: Workflow `.github/workflows/slack-reminder.yaml` runs daily at 00:00 UTC (09:00 JST) and can be run on-demand.
 - **AI News**: Workflow `.github/workflows/slack-news.yaml` runs daily at 22:00 UTC (07:00 JST) and can be run on-demand.
+- **Ryuukuru Mention**: Workflow `.github/workflows/ryuukuru-mention.yaml` can be run on-demand to start the web server.
 - `TZ=Asia/Tokyo` is used for local-day matching.
 
 ### Local run
@@ -88,10 +124,16 @@ AI News:
 SLACK_BOT_TOKEN=xoxb-... SLACK_CHANNEL_ID=C0123456789 TZ=Asia/Tokyo npm run ai-news
 ```
 
+Ryuukuru Mention:
+```bash
+SLACK_BOT_TOKEN=xoxb-... OPENAI_API_KEY=sk-... npm run ryuukuru
+```
+
 ### Notes
 - Event Reminder posts a reminder as a threaded reply under the original proposal message.
 - Only messages with recognizable datetime formats are considered.
 - AI News bot collects the top 3 most relevant AI news from the past 24 hours.
-- Both bots use the same Slack app and token for simplicity.
+- Ryuukuru Mention bot responds to @Ryuukuru mentions in any channel.
+- All bots use the same Slack app and token for simplicity.
 
 

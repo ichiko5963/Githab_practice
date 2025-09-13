@@ -29,22 +29,28 @@ if (!SLACK_CHANNEL_ID) {
 // Slackクライアント初期化
 const slack = new WebClient(SLACK_BOT_TOKEN);
 
-// AI関連のキーワード（日本語と英語）
+// AI関連のキーワード（機能・アップデート中心）
 const AI_KEYWORDS = [
-  // 英語キーワード
+  // 機能・アップデート関連
+  'update', 'upgrade', 'new feature', 'release', 'launch', 'announce',
+  'improvement', 'enhancement', 'new version', 'beta', 'preview',
+  'アップデート', '新機能', 'リリース', 'ローンチ', '発表', '改善',
+  'バージョン', 'ベータ', 'プレビュー', '機能追加',
+  
+  // AI技術・ツール
   'AI', 'artificial intelligence', 'machine learning', 'deep learning',
-  'GPT', 'ChatGPT', 'Claude', 'Gemini', 'OpenAI', 'Anthropic', 'Google AI',
+  'GPT', 'ChatGPT', 'Claude', 'Gemini', 'OpenAI', 'Anthropic',
   'neural network', 'LLM', 'large language model', 'generative AI',
   'computer vision', 'NLP', 'natural language processing',
-  'robotics', 'automation', 'AI tool', 'AI update', 'AI feature',
-  // 日本語キーワード
+  'robotics', 'automation', 'AI tool', 'AI feature',
   '人工知能', '機械学習', '深層学習', 'ニューラルネットワーク',
   '生成AI', '大規模言語モデル', '自然言語処理', 'コンピュータビジョン',
-  'ロボティクス', '自動化', 'AIツール', 'AI機能', 'AIアップデート',
-  // 日本のAI企業・サービス
-  'ソニー', 'ソフトバンク', 'NEC', '富士通', '日立', '東芝',
-  'リクルート', 'メルカリ', '楽天', 'サイバーエージェント',
-  'Preferred Networks', 'PFN', 'ABEJA', 'HACARUS'
+  'ロボティクス', '自動化', 'AIツール', 'AI機能',
+  
+  // 実用的なAIサービス
+  'image generation', 'text generation', 'voice synthesis', 'translation',
+  'recommendation', 'prediction', 'analysis', 'optimization',
+  '画像生成', 'テキスト生成', '音声合成', '翻訳', '推薦', '予測', '分析'
 ];
 
 // OpenAI APIを使った記事要約関数
@@ -228,15 +234,27 @@ function filterRecentNews(newsItems) {
   });
 }
 
-// ニュースを関連性でスコアリング
+// ニュースを関連性でスコアリング（機能・アップデート重視）
 function scoreNews(newsItem) {
   let score = 0;
   const text = `${newsItem.title} ${newsItem.description}`.toLowerCase();
   
-  // 重要なキーワードに高いスコア
-  const importantKeywords = ['openai', 'chatgpt', 'claude', 'gemini', 'update', 'release', 'new feature', 'breakthrough'];
-  importantKeywords.forEach(keyword => {
-    if (text.includes(keyword)) score += 10;
+  // 機能・アップデート関連に最高スコア
+  const updateKeywords = ['update', 'upgrade', 'new feature', 'release', 'launch', 'improvement', 'enhancement', 'beta', 'preview', 'アップデート', '新機能', 'リリース', 'ローンチ', '改善', 'ベータ', 'プレビュー'];
+  updateKeywords.forEach(keyword => {
+    if (text.includes(keyword)) score += 15;
+  });
+  
+  // 実用的なAIサービスに高スコア
+  const practicalKeywords = ['image generation', 'text generation', 'voice synthesis', 'translation', 'recommendation', 'prediction', 'analysis', '画像生成', 'テキスト生成', '音声合成', '翻訳', '推薦', '予測', '分析'];
+  practicalKeywords.forEach(keyword => {
+    if (text.includes(keyword)) score += 12;
+  });
+  
+  // 人気AIツールに中スコア
+  const popularTools = ['chatgpt', 'claude', 'gemini', 'openai', 'anthropic'];
+  popularTools.forEach(keyword => {
+    if (text.includes(keyword)) score += 8;
   });
   
   // 一般的なAIキーワード

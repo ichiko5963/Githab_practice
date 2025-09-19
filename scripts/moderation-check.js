@@ -14,7 +14,7 @@ console.log('- TZ:', TZ);
 
 // 必須環境変数のチェック（テストモードではスキップ）
 const args = process.argv.slice(2);
-const isTestMode = args.includes('--test-schedule');
+const isTestMode = args.includes('--test-schedule') || args.includes('--test-check');
 
 if (!SLACK_BOT_TOKEN && !isTestMode) {
   console.error('❌ SLACK_BOT_TOKEN が設定されていません');
@@ -46,16 +46,28 @@ async function getChannelPostCount(channelName) {
   try {
     console.log(`📊 ${channelName} の投稿数を確認中...`);
     
-    // チャンネルIDを取得
-    const channelList = await slack.conversations.list({
-      types: 'public_channel,private_channel'
-    });
+    // チャンネルIDを取得（エラーハンドリングを強化）
+    let channelList;
+    try {
+      channelList = await slack.conversations.list({
+        types: 'public_channel,private_channel',
+        exclude_archived: true
+      });
+    } catch (listError) {
+      console.error(`❌ チャンネルリスト取得エラー:`, listError.message);
+      if (listError.message.includes('missing_scope')) {
+        console.log(`💡 必要なスコープ: channels:read, groups:read`);
+      }
+      return -1;
+    }
     
     const channel = channelList.channels.find(ch => ch.name === channelName);
     if (!channel) {
       console.log(`⚠️ チャンネル ${channelName} が見つかりません`);
       return -1; // エラーを示す
     }
+    
+    console.log(`📍 チャンネルID: ${channel.id}`);
     
     // 今日の開始時刻（JST）を計算
     const now = new Date();
@@ -69,26 +81,49 @@ async function getChannelPostCount(channelName) {
     
     console.log(`📅 チェック期間: ${format(todayStartUTC, 'yyyy-MM-dd HH:mm:ss')} - ${format(todayEndUTC, 'yyyy-MM-dd HH:mm:ss')}`);
     
-    // チャンネルの履歴を取得
-    const history = await slack.conversations.history({
-      channel: channel.id,
-      oldest: (todayStartUTC.getTime() / 1000).toString(),
-      latest: (todayEndUTC.getTime() / 1000).toString(),
-      limit: 1000
-    });
+    // チャンネルの履歴を取得（エラーハンドリングを強化）
+    let history;
+    try {
+      history = await slack.conversations.history({
+        channel: channel.id,
+        oldest: (todayStartUTC.getTime() / 1000).toString(),
+        latest: (todayEndUTC.getTime() / 1000).toString(),
+        limit: 1000,
+        inclusive: true
+      });
+    } catch (historyError) {
+      console.error(`❌ チャンネル履歴取得エラー:`, historyError.message);
+      if (historyError.message.includes('missing_scope')) {
+        console.log(`💡 必要なスコープ: channels:history, groups:history`);
+      }
+      return -1;
+    }
     
     // ボット自身のメッセージを除外してカウント
     const botUserId = await getBotUserId();
-    const userMessages = history.messages.filter(msg => 
-      msg.user !== botUserId && 
-      msg.subtype !== 'channel_join' && 
-      msg.subtype !== 'channel_leave' &&
-      msg.subtype !== 'channel_topic' &&
-      msg.subtype !== 'channel_purpose'
-    );
+    const userMessages = history.messages.filter(msg => {
+      // 通常のメッセージのみをカウント（subtypeがないメッセージ）
+      if (msg.subtype) {
+        return false;
+      }
+      // ボット自身のメッセージを除外
+      if (msg.user === botUserId) {
+        return false;
+      }
+      return true;
+    });
     
     const postCount = userMessages.length;
     console.log(`✓ ${channelName}: ${postCount}件の投稿を確認`);
+    
+    // デバッグ用：メッセージの詳細を表示
+    if (postCount > 0) {
+      console.log(`📝 投稿例:`, userMessages.slice(0, 3).map(msg => ({
+        user: msg.user,
+        text: msg.text?.substring(0, 50) + '...',
+        timestamp: format(new Date(parseFloat(msg.ts) * 1000), 'HH:mm:ss')
+      })));
+    }
     
     return postCount;
     

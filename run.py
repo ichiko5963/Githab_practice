@@ -84,17 +84,32 @@ def get_messages_in_period(channel_id, start_time, end_time):
     return messages
 
 def analyze_reactions(messages):
-    """リアクションを分析"""
+    """リアクションを分析（リアクションをした人を集計）"""
     reaction_counts = Counter()
     
     for message in messages:
         if 'reactions' in message:
             for reaction in message['reactions']:
-                # 各リアクションのユーザーをカウント
+                # 各リアクションのユーザーをカウント（リアクションをした人）
                 for user_id in reaction['users']:
                     reaction_counts[user_id] += 1
     
     return reaction_counts
+
+def analyze_reactions_received(messages):
+    """リアクションを受けた人を分析"""
+    reaction_received_counts = Counter()
+    
+    for message in messages:
+        if 'reactions' in message:
+            # メッセージの投稿者を取得
+            message_user = message.get('user')
+            if message_user:
+                # そのメッセージに付けられたリアクションの総数をカウント
+                total_reactions = sum(reaction['count'] for reaction in message['reactions'])
+                reaction_received_counts[message_user] += total_reactions
+    
+    return reaction_received_counts
 
 def analyze_posts(messages):
     """投稿数を分析"""
@@ -115,8 +130,10 @@ def generate_ryuukuru_report(messages, channel_name):
     """リュウクル風のレポートを生成"""
     # 投稿数分析
     post_counts = analyze_posts(messages)
-    # リアクション分析
-    reaction_counts = analyze_reactions(messages)
+    # リアクション分析（リアクションをした人）
+    reaction_given_counts = analyze_reactions(messages)
+    # リアクション分析（リアクションを受けた人）
+    reaction_received_counts = analyze_reactions_received(messages)
     
     # リュウクル風のレポート生成
     report = f"""リュウクル参上！
@@ -137,11 +154,21 @@ def generate_ryuukuru_report(messages, channel_name):
     else:
         report += "\n　投稿データなし"
     
-    report += "\n\n2. リアクションが多かった人"
+    report += "\n\n2. リアクションを多くした人（アクティブ度）"
     
-    # リアクションランキング（上位3位）
-    if reaction_counts:
-        for i, (user_id, count) in enumerate(reaction_counts.most_common(3), 1):
+    # リアクションをした人ランキング（上位3位）
+    if reaction_given_counts:
+        for i, (user_id, count) in enumerate(reaction_given_counts.most_common(3), 1):
+            user_name = get_user_name(user_id)
+            report += f"\n　{i}位 {user_name}さん：{count}回のリアクション！"
+    else:
+        report += "\n　リアクションデータなし"
+    
+    report += "\n\n3. リアクションを多く受けた人（人気度）"
+    
+    # リアクションを受けた人ランキング（上位3位）
+    if reaction_received_counts:
+        for i, (user_id, count) in enumerate(reaction_received_counts.most_common(3), 1):
             user_name = get_user_name(user_id)
             report += f"\n　{i}位 {user_name}さん：{count}回のリアクション獲得！"
     else:
@@ -149,8 +176,8 @@ def generate_ryuukuru_report(messages, channel_name):
     
     report += f"""
 
-3. コメント数が多かったチャンネル
-　{channel_name}：{len(messages)}件
+4. チャンネル活動状況
+　{channel_name}：{len(messages)}件のメッセージ
 
 これで今週のSlack活動は一目瞭然だな。
 来週もオイラが集計して報告するから、楽しみにしててくれよ！"""

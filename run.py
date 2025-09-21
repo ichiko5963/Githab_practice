@@ -167,6 +167,20 @@ def main():
         
         if not messages:
             print(f"指定期間内にメッセージが見つかりませんでした。")
+            # エラー時でもレポートファイルを作成
+            error_report = f"""リュウクル参上！
+今週のSlack活動をまとめてきたぞ。
+
+■ 集計期間: {START_JST.strftime('%Y年%m月%d日')} ～ {END_JST.strftime('%Y年%m月%d日')}
+■ 実行時刻: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}
+
+申し訳ないが、今週はデータが取得できなかったぞ。
+Slack Appの権限設定を確認してくれ！
+
+来週はきっと正常に集計できるはずだ！"""
+            
+            with open('weekly_report.txt', 'w', encoding='utf-8') as f:
+                f.write(error_report)
             return
         
         # リュウクル風レポート生成
@@ -181,6 +195,22 @@ def main():
             
     except Exception as e:
         print(f"エラーが発生しました: {e}")
+        # エラー時でもレポートファイルを作成
+        error_report = f"""リュウクル参上！
+今週のSlack活動をまとめてきたぞ。
+
+■ 集計期間: {START_JST.strftime('%Y年%m月%d日')} ～ {END_JST.strftime('%Y年%m月%d日')}
+■ 実行時刻: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}
+
+申し訳ないが、エラーが発生したぞ。
+エラー内容: {str(e)}
+
+Slack Appの権限設定を確認してくれ！
+
+来週はきっと正常に集計できるはずだ！"""
+        
+        with open('weekly_report.txt', 'w', encoding='utf-8') as f:
+            f.write(error_report)
 
 if __name__ == "__main__":
     main()

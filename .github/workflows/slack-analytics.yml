@@ -5,6 +5,7 @@ on:
     # 毎週月曜日の6:30 JST (日曜日の21:30 UTC)
     - cron: '30 21 * * 0'
   workflow_dispatch: # 手動実行も可能
+  push: # プッシュ時にも実行（テスト用）
 
 jobs:
   slack-analytics:

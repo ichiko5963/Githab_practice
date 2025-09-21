@@ -29,23 +29,27 @@ GitHubリポジトリの設定で以下のSecretsを追加してください：
 - Value: `C09B8K9K4BV`
 - 説明: 分析対象のSlackチャンネルID
 
-**SLACK_DM_USER_ID**
-- Name: `SLACK_DM_USER_ID`
-- Value: `U09B8K99MLK` （「いち l AI就活（代表）」のユーザーID）
-- 説明: DM送信先のユーザーID
+**SLACK_REPORT_CHANNEL_ID**
+- Name: `SLACK_REPORT_CHANNEL_ID`
+- Value: `C09GRPB32QH` （自動化チェックチャンネルのID）
+- 説明: レポート送信先のチャンネルID
 
-### 2. ユーザーIDの取得方法
+### 2. チャンネルIDの取得方法
 
-「いち l AI就活（代表）」のユーザーIDを取得するには：
+自動化チェックチャンネルのIDを取得するには：
 
 #### 方法1: Slackアプリから取得
-1. Slackアプリで「いち l AI就活（代表）」のプロフィールを表示
-2. 「その他」→「メンバーIDをコピー」をクリック
-3. `U`で始まるIDをコピー（例：`U09B8K99MLK`）
+1. Slackアプリで自動化チェックチャンネルを右クリック
+2. 「リンクをコピー」を選択
+3. URLの末尾がチャンネルID（例：`C09GRPB32QH`）
 
-#### 方法2: ヘルパースクリプトを使用
-```bash
-python get_user_id.py
+#### 方法2: スクリプトで一覧取得
+```python
+from slack_sdk.web import WebClient
+client = WebClient(token="YOUR_TOKEN_HERE")
+channels = client.conversations_list()
+for channel in channels['channels']:
+    print(f"#{channel['name']}: {channel['id']}")
 ```
 
 ### 3. Slack Appの権限設定
@@ -57,13 +61,13 @@ Slack Appに以下の権限が必要です：
 - `channels:read` - チャンネル情報取得
 - `reactions:read` - リアクション情報取得
 - `users:read` - ユーザー情報取得
-- `chat:write` - DM送信用
+- `chat:write` - チャンネル投稿用
 
 ## 実行方法
 
 ### 自動実行
 - 毎週月曜日の6:30（JST）に自動実行
-- 実行結果は「いち l AI就活（代表）」のDMに送信
+- 実行結果は自動化チェックチャンネルに投稿
 
 ### 手動実行
 1. GitHubリポジトリの「Actions」タブをクリック
@@ -82,9 +86,9 @@ Slack Appに以下の権限が必要です：
    - CHANNELS_IDが正しいか確認
    - Slack Appがそのチャンネルにアクセス権限を持っているか確認
 
-3. **DM送信エラー**
-   - SLACK_DM_USER_IDが正しいか確認
-   - Slack AppがDM送信権限を持っているか確認
+3. **チャンネル投稿エラー**
+   - SLACK_REPORT_CHANNEL_IDが正しいか確認
+   - Slack Appがチャンネル投稿権限を持っているか確認
 
 4. **データが取得できない**
    - 対象期間にメッセージが存在するか確認

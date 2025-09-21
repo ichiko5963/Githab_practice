@@ -96,6 +96,67 @@ def analyze_reactions(messages):
     
     return reaction_counts
 
+def analyze_posts(messages):
+    """投稿数を分析"""
+    post_counts = Counter()
+    
+    for message in messages:
+        # botメッセージやシステムメッセージは除外
+        if message.get('subtype') in ['bot_message', 'system']:
+            continue
+        
+        user_id = message.get('user')
+        if user_id:
+            post_counts[user_id] += 1
+    
+    return post_counts
+
+def generate_ryuukuru_report(messages, channel_name):
+    """リュウクル風のレポートを生成"""
+    # 投稿数分析
+    post_counts = analyze_posts(messages)
+    # リアクション分析
+    reaction_counts = analyze_reactions(messages)
+    
+    # リュウクル風のレポート生成
+    report = f"""リュウクル参上！
+今週のSlack活動をまとめてきたぞ。
+
+■ 集計期間: {START_JST.strftime('%Y年%m月%d日')} ～ {END_JST.strftime('%Y年%m月%d日')}
+■ 実行時刻: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}
+
+今週はこんな感じだった！
+
+1. 投稿数ランキング"""
+    
+    # 投稿数ランキング（上位5位）
+    if post_counts:
+        for i, (user_id, count) in enumerate(post_counts.most_common(5), 1):
+            user_name = get_user_name(user_id)
+            report += f"\n　{i}位 {user_name}さん：{count}件"
+    else:
+        report += "\n　投稿データなし"
+    
+    report += "\n\n2. リアクションが多かった人"
+    
+    # リアクションランキング（上位3位）
+    if reaction_counts:
+        for i, (user_id, count) in enumerate(reaction_counts.most_common(3), 1):
+            user_name = get_user_name(user_id)
+            report += f"\n　{i}位 {user_name}さん：{count}回のリアクション獲得！"
+    else:
+        report += "\n　リアクションデータなし"
+    
+    report += f"""
+
+3. コメント数が多かったチャンネル
+　{channel_name}：{len(messages)}件
+
+これで今週のSlack活動は一目瞭然だな。
+来週もオイラが集計して報告するから、楽しみにしててくれよ！"""
+    
+    return report
+
 def main():
     try:
         # チャンネル名を取得
@@ -108,23 +169,15 @@ def main():
             print(f"指定期間内にメッセージが見つかりませんでした。")
             return
         
-        # リアクション分析
-        reaction_counts = analyze_reactions(messages)
+        # リュウクル風レポート生成
+        report = generate_ryuukuru_report(messages, channel_name)
         
         # 結果表示
-        print(f"\n=== 結果 ===")
-        print(f"{channel_name} チャンネルの状況")
-        print(f"{START_JST.strftime('%Y-%m-%d %H:%M:%S')} ～ {END_JST.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"総メッセージ数: {len(messages)}")
+        print(report)
         
-        if reaction_counts:
-            print(f"リアクション回数: ")
-            # 上位RANK_NUMBER件を表示
-            for user_id, count in reaction_counts.most_common(RANK_NUMBER):
-                user_name = get_user_name(user_id)
-                print(f"  {user_name}: {count}回")
-        else:
-            print("リアクション: なし")
+        # レポートをファイルに保存（send_dm.pyで使用）
+        with open('weekly_report.txt', 'w', encoding='utf-8') as f:
+            f.write(report)
             
     except Exception as e:
         print(f"エラーが発生しました: {e}")

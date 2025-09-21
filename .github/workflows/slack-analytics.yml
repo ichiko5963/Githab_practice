@@ -27,8 +27,7 @@ jobs:
     - name: Run Slack Analytics
       env:
         SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
-        CHANNELS_ID: ${{ secrets.CHANNELS_ID }}
-        SLACK_DM_USER_ID: ${{ secrets.SLACK_DM_USER_ID }}
+        CHANNELS_ID: ${{ secrets.SLACK_CHANNEL_ID }}
       run: |
         python run.py
         

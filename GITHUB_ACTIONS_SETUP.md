@@ -24,8 +24,8 @@ GitHubリポジトリの設定で以下のSecretsを追加してください：
 - Value: `YOUR_SLACK_TOKEN_HERE` （実際のトークンに置き換えてください）
 - 説明: Slack AppのUser OAuth Token
 
-**CHANNELS_ID**
-- Name: `CHANNELS_ID`
+**SLACK_CHANNEL_ID**
+- Name: `SLACK_CHANNEL_ID`
 - Value: `C09B8K9K4BV`
 - 説明: 分析対象のSlackチャンネルID
 
@@ -83,7 +83,7 @@ Slack Appに以下の権限が必要です：
    - Slack Appが適切な権限を持っているか確認
 
 2. **チャンネルアクセスエラー**
-   - CHANNELS_IDが正しいか確認
+   - SLACK_CHANNEL_IDが正しいか確認
    - Slack Appがそのチャンネルにアクセス権限を持っているか確認
 
 3. **チャンネル投稿エラー**

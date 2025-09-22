@@ -211,25 +211,40 @@ async function createRyuukuruReport(introMessages, startDate, endDate) {
   const startDateStr = format(startDate, 'M月d日', { locale: ja });
   const endDateStr = format(endDate, 'M月d日', { locale: ja });
   
-  let message = `リュウクル参上！！ 🐲🔥\nこの4日間（${startDateStr}〜${endDateStr}）の自己紹介をチェックしたぞ！\n\n`;
+  let message = `<!channel> リュウクル参上！！ 🐲🔥\nこの4日間（${startDateStr}〜${endDateStr}）の自己紹介をチェックしたぞ！\n\n`;
   
   if (introMessages.length === 0) {
     message += `悲しいことに、この期間は自己紹介してくれる仲間はいなかった…。\nでも自己紹介すれば、趣味や興味が合う仲間とつながれるんだ。\n次こそ名乗りを上げてくれよな！\n\n`;
   } else {
     message += `新しい仲間が自己紹介してくれたんだ！\n\n`;
     
+    // メンション用のユーザーIDリストを作成
+    const mentionedUsers = [];
+    
     // 各自己紹介を処理
     for (const msg of introMessages) {
       const userName = msg.userInfo.real_name || msg.userInfo.display_name || 'Unknown User';
+      const userId = msg.userInfo.id;
       const introText = msg.text || '';
       
       // AIで要約・コメント生成
       const analysis = await generateRyuukuruComment(introText, userName);
       
-      message += `- ${userName}さん：${analysis.summary} → ${analysis.comment}\n`;
+      // メンション用のユーザーIDを収集
+      if (userId && !mentionedUsers.includes(userId)) {
+        mentionedUsers.push(userId);
+      }
+      
+      message += `- <@${userId}>さん：${analysis.summary} → ${analysis.comment}\n`;
     }
     
-    message += `\nみんなも趣味や気になることが合う子を見つけたら、スレッドで話しかけに行ってみてくれよな！\n\n`;
+    // 途中でメンションを追加
+    if (mentionedUsers.length > 0) {
+      const mentions = mentionedUsers.map(id => `<@${id}>`).join(' ');
+      message += `\n${mentions} みんなも趣味や気になることが合う子を見つけたら、スレッドで話しかけに行ってみてくれよな！\n\n`;
+    } else {
+      message += `\nみんなも趣味や気になることが合う子を見つけたら、スレッドで話しかけに行ってみてくれよな！\n\n`;
+    }
   }
   
   // 自己紹介リンク案内
@@ -295,25 +310,70 @@ async function main() {
     // メッセージを取得
     const messages = await getMessagesInPeriod(channelId, startDate, endDate);
     
-    // 自己紹介メッセージをフィルタリング（簡単な判定）
+    // 自己紹介メッセージをフィルタリング（改善版）
     const introMessages = messages.filter(msg => {
       const text = (msg.text || '').toLowerCase();
+      
+      // システムメッセージやボットメッセージを除外
+      if (msg.subtype || msg.bot_id) {
+        return false;
+      }
+      
+      // 短すぎるメッセージを除外
+      if (!msg.text || msg.text.length < 10) {
+        return false;
+      }
+      
       // 自己紹介らしいキーワードを含むメッセージを抽出
       const introKeywords = [
-        '自己紹介', 'はじめまして', 'よろしく', '趣味', '好き', '興味',
-        '仕事', '職業', '会社', '学生', '勉強', '学習', '経験',
-        'ai', 'chatgpt', 'claude', 'gemini', 'midjourney', 'n8n'
+        // 基本的な自己紹介キーワード
+        '自己紹介', 'はじめまして', 'よろしく', '初めまして',
+        // 趣味・興味関連
+        '趣味', '好き', '興味', '関心', 'ハマってる', 'やってる',
+        // 仕事・学習関連
+        '仕事', '職業', '会社', '学生', '勉強', '学習', '経験', 'やってます',
+        // AI関連（特に重要）
+        'ai', 'chatgpt', 'claude', 'gemini', 'midjourney', 'n8n', 'dify', 'zapier',
+        // その他の活動
+        '活動', '参加', 'やってる', '始めた', '始めました', '挑戦', '頑張ってる',
+        // 挨拶・紹介
+        'こんにちは', 'こんばんは', 'おはよう', 'よろしくお願いします',
+        '紹介', '名乗り', '言います', '申します'
       ];
       
-      return introKeywords.some(keyword => text.includes(keyword)) && 
-             !msg.subtype && // システムメッセージを除外
-             msg.text && msg.text.length > 10; // 短すぎるメッセージを除外
+      // キーワードマッチング
+      const hasIntroKeyword = introKeywords.some(keyword => text.includes(keyword));
+      
+      // 長いメッセージ（自己紹介の可能性が高い）も含める
+      const isLongMessage = msg.text.length > 50;
+      
+      return hasIntroKeyword || isLongMessage;
     });
     
     console.log(`📊 自己紹介メッセージ: ${introMessages.length}件`);
     
+    // ユーザーごとに最新のメッセージのみを取得（重複回避）
+    const uniqueIntroMessages = [];
+    const userMessageMap = new Map();
+    
+    // メッセージを時系列でソート（古い順）
+    const sortedMessages = introMessages.sort((a, b) => new Date(a.ts * 1000) - new Date(b.ts * 1000));
+    
+    // 各ユーザーの最新メッセージを記録
+    sortedMessages.forEach(msg => {
+      const userId = msg.userInfo.id;
+      if (userId) {
+        userMessageMap.set(userId, msg);
+      }
+    });
+    
+    // 重複を除いたメッセージリストを作成
+    uniqueIntroMessages.push(...userMessageMap.values());
+    
+    console.log(`📊 重複除去後の自己紹介メッセージ: ${uniqueIntroMessages.length}件`);
+    
     // リュウクルの報告メッセージを生成
-    const reportMessage = await createRyuukuruReport(introMessages, startDate, endDate);
+    const reportMessage = await createRyuukuruReport(uniqueIntroMessages, startDate, endDate);
     
     // Slackに送信
     const success = await sendToSlack(reportMessage);

@@ -63,29 +63,28 @@ async function getChannelId(channelIdentifier) {
 }
 
 /**
- * 指定期間のメッセージを取得（改善版）
+ * 指定期間のメッセージを取得（期間指定なし版）
  */
 async function getMessagesInPeriod(channelId, startDate, endDate) {
   try {
     console.log(`📅 メッセージ取得中: ${format(startDate, 'yyyy-MM-dd HH:mm')} 〜 ${format(endDate, 'yyyy-MM-dd HH:mm')}`);
+    console.log(`⚠️ 期間指定を無効化して全メッセージを取得します`);
     
     const messages = [];
     let cursor = null;
     let hasMore = true;
     let totalFetched = 0;
-    const maxRetries = 10; // 最大10回までページネーション
+    const maxRetries = 20; // 最大20回までページネーション
     let retryCount = 0;
     
     while (hasMore && retryCount < maxRetries) {
       console.log(`📄 ページネーション ${retryCount + 1}回目開始...`);
       
+      // 期間指定を削除して全メッセージを取得
       const result = await slack.conversations.history({
         channel: channelId,
-        oldest: Math.floor(startDate.getTime() / 1000),
-        latest: Math.floor(endDate.getTime() / 1000),
         cursor: cursor,
-        limit: 200,
-        inclusive: true
+        limit: 200
       });
       
       const newMessages = result.messages || [];
@@ -114,8 +113,20 @@ async function getMessagesInPeriod(channelId, startDate, endDate) {
     
     console.log(`📊 全ページネーション完了: 合計 ${totalFetched}件取得`);
     
+    // 期間でフィルタリング
+    const filteredMessages = messages.filter(msg => {
+      const msgDate = new Date(msg.ts * 1000);
+      const isInPeriod = msgDate >= startDate && msgDate <= endDate;
+      if (isInPeriod) {
+        console.log(`✅ 期間内メッセージ: ${msgDate.toISOString()} - ${(msg.text || '').substring(0, 30)}...`);
+      }
+      return isInPeriod;
+    });
+    
+    console.log(`📅 期間フィルタリング後: ${filteredMessages.length}件`);
+    
     // ユーザー情報を取得
-    const userIds = [...new Set(messages.map(msg => msg.user).filter(Boolean))];
+    const userIds = [...new Set(filteredMessages.map(msg => msg.user).filter(Boolean))];
     console.log(`👥 ユーザー数: ${userIds.length}人`);
     
     const userMap = {};
@@ -131,7 +142,7 @@ async function getMessagesInPeriod(channelId, startDate, endDate) {
     }
     
     // メッセージにユーザー情報を追加
-    const messagesWithUsers = messages.map(msg => ({
+    const messagesWithUsers = filteredMessages.map(msg => ({
       ...msg,
       userInfo: userMap[msg.user] || { real_name: 'Unknown User', display_name: 'Unknown User', id: msg.user }
     }));

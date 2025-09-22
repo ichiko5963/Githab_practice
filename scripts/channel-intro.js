@@ -30,7 +30,7 @@ const TARGET_CHANNELS = [
   '84_manus-genspark',
   '85_suno-udio-veo3-midjourney-sora',
   '86_n8n-dify-zapier',
-  '88_veo3-midjourney-sora',
+  '87_画像生成ai',
   '91_tkくんのobsidian部屋',
   '92_いちのai-agent作ろう部屋'
 ];

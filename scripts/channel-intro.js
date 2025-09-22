@@ -99,7 +99,7 @@ function generateChannelIntroMessage(channelMap) {
   
   return `【チャンネルのご紹介】 <!channel>
 
-リュウクル参上！
+リュウクル参上！！:龍の顔::火:
 No.7以降のチャンネルには、こんなに面白い部屋が揃ってるぞ。
 ${channelLinks}
 AIからツール活用、ノート術まで盛りだくさんだな！

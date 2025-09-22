@@ -43,33 +43,19 @@ AIからツール活用、ノート術まで盛りだくさんだな！
 オイラは毎日見張ってるから、みんなの参加を楽しみにしてるぜ！`;
 
 /**
- * チャンネルIDを取得
+ * チャンネルIDまたはチャンネル名をそのまま使用
  */
-async function getChannelId(channelName) {
-  try {
-    console.log(`📊 チャンネル ${channelName} のIDを取得中...`);
-    
-    const channelList = await slack.conversations.list({
-      types: 'public_channel,private_channel',
-      exclude_archived: true
-    });
-    
-    const channel = channelList.channels.find(ch => ch.name === channelName);
-    if (!channel) {
-      console.log(`⚠️ チャンネル ${channelName} が見つかりません`);
-      return null;
-    }
-    
-    console.log(`📍 チャンネルID: ${channel.id}`);
-    return channel.id;
-    
-  } catch (error) {
-    console.error(`❌ チャンネルID取得エラー:`, error.message);
-    if (error.message.includes('missing_scope')) {
-      console.log(`💡 必要なスコープ: channels:read, groups:read`);
-    }
-    return null;
+function getChannelIdentifier(channelIdentifier) {
+  // チャンネルID（Cで始まる）の場合はそのまま使用
+  if (channelIdentifier.startsWith('C') || channelIdentifier.startsWith('G')) {
+    console.log(`📍 チャンネルIDを直接使用: ${channelIdentifier}`);
+    return channelIdentifier;
   }
+  
+  // チャンネル名の場合は#を付けて使用
+  const channelName = channelIdentifier.startsWith('#') ? channelIdentifier : `#${channelIdentifier}`;
+  console.log(`📍 チャンネル名を使用: ${channelName}`);
+  return channelName;
 }
 
 /**
@@ -79,21 +65,18 @@ async function sendChannelIntroMessage() {
   try {
     console.log('📢 チャンネル紹介メッセージを送信中...');
     
-    // チャンネルIDを取得
-    const channelId = await getChannelId(TARGET_CHANNEL);
-    if (!channelId) {
-      console.error(`❌ チャンネル ${TARGET_CHANNEL} が見つかりません`);
-      return false;
-    }
+    // チャンネル識別子を取得（IDまたは名前）
+    const channelIdentifier = getChannelIdentifier(TARGET_CHANNEL);
     
     // メッセージを送信
     const result = await slack.chat.postMessage({
-      channel: channelId,
+      channel: channelIdentifier,
       text: CHANNEL_INTRO_MESSAGE
     });
     
     console.log(`✅ チャンネル紹介メッセージ送信完了`);
     console.log(`📝 メッセージID: ${result.ts}`);
+    console.log(`📍 送信先: ${channelIdentifier}`);
     
     return true;
     
@@ -101,6 +84,12 @@ async function sendChannelIntroMessage() {
     console.error(`❌ メッセージ送信エラー:`, error.message);
     if (error.message.includes('missing_scope')) {
       console.log(`💡 必要なスコープ: chat:write, channels:write, groups:write`);
+    }
+    if (error.message.includes('channel_not_found')) {
+      console.log(`💡 チャンネルが見つかりません。チャンネルIDまたは名前を確認してください`);
+    }
+    if (error.message.includes('not_in_channel')) {
+      console.log(`💡 ボットがチャンネルに参加していません。チャンネルに招待してください`);
     }
     return false;
   }

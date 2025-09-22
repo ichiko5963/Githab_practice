@@ -149,11 +149,11 @@ async function getBotUserId() {
 /**
  * 運営チームチャンネルに通知を送信
  */
-async function sendNotificationToModerationTeam(channelName, moderationChannel) {
+async function sendNotificationToModerationTeam(channelName, moderationChannel, targetDate) {
   try {
     console.log(`📢 ${moderationChannel} に通知を送信中...`);
     
-    const message = `#${channelName} で今日まだ投稿がありません。ご確認ください。`;
+    const message = `#${channelName} で ${targetDate}（奇数の日）に投稿がありませんでした。ご確認ください。`;
     
     await slack.chat.postMessage({
       channel: moderationChannel,
@@ -170,7 +170,17 @@ async function sendNotificationToModerationTeam(channelName, moderationChannel) 
 }
 
 /**
+ * 指定された日付が奇数の日かどうかを判定
+ */
+function isOddDay(date) {
+  const checkDate = parseISO(date);
+  const day = checkDate.getDate();
+  return day % 2 === 1; // 奇数の日
+}
+
+/**
  * 指定された日付がチェック対象日かどうかを判定
+ * 奇数の日の投稿をチェックする
  */
 function isCheckTargetDate(date) {
   const startDate = parseISO(START_DATE);
@@ -181,11 +191,97 @@ function isCheckTargetDate(date) {
     return false;
   }
   
-  // 開始日からの経過日数を計算
-  const daysDiff = Math.floor((checkDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  // 奇数の日のみが対象
+  return isOddDay(date);
+}
+
+/**
+ * 前の奇数の日を取得
+ */
+function getPreviousOddDay(date) {
+  const checkDate = parseISO(date);
+  let previousDay = addDays(checkDate, -1);
   
-  // 2日おきのスケジュール（0, 2, 4, 6...）
-  return daysDiff % 2 === 0;
+  // 奇数の日になるまで遡る
+  while (!isOddDay(format(previousDay, 'yyyy-MM-dd'))) {
+    previousDay = addDays(previousDay, -1);
+  }
+  
+  return format(previousDay, 'yyyy-MM-dd');
+}
+
+/**
+ * 指定された日の投稿数をチェック
+ */
+async function checkChannelPostsForDate(channelName, targetDate) {
+  try {
+    console.log(`📊 ${channelName} の ${targetDate} の投稿数を確認中...`);
+    
+    // チャンネルIDを取得
+    let channelList;
+    try {
+      channelList = await slack.conversations.list({
+        types: 'public_channel,private_channel',
+        exclude_archived: true
+      });
+    } catch (listError) {
+      console.error(`❌ チャンネルリスト取得エラー:`, listError.message);
+      return -1;
+    }
+    
+    const channel = channelList.channels.find(ch => ch.name === channelName);
+    if (!channel) {
+      console.log(`⚠️ チャンネル ${channelName} が見つかりません`);
+      return -1;
+    }
+    
+    // 指定日の開始時刻（JST）を計算
+    const targetDateObj = parseISO(targetDate);
+    const dayStart = new Date(targetDateObj.getFullYear(), targetDateObj.getMonth(), targetDateObj.getDate(), 0, 0, 0);
+    const dayStartUTC = fromZonedTime(dayStart, TZ);
+    
+    // 指定日の終了時刻（JST）を計算
+    const dayEnd = new Date(targetDateObj.getFullYear(), targetDateObj.getMonth(), targetDateObj.getDate(), 23, 59, 59);
+    const dayEndUTC = fromZonedTime(dayEnd, TZ);
+    
+    console.log(`📅 チェック期間: ${format(dayStartUTC, 'yyyy-MM-dd HH:mm:ss')} - ${format(dayEndUTC, 'yyyy-MM-dd HH:mm:ss')}`);
+    
+    // チャンネルの履歴を取得
+    let history;
+    try {
+      history = await slack.conversations.history({
+        channel: channel.id,
+        oldest: (dayStartUTC.getTime() / 1000).toString(),
+        latest: (dayEndUTC.getTime() / 1000).toString(),
+        limit: 1000,
+        inclusive: true
+      });
+    } catch (historyError) {
+      console.error(`❌ チャンネル履歴取得エラー:`, historyError.message);
+      return -1;
+    }
+    
+    // ボット自身のメッセージを除外してカウント
+    const botUserId = await getBotUserId();
+    const userMessages = history.messages.filter(msg => {
+      if (msg.subtype) {
+        return false;
+      }
+      if (msg.user === botUserId) {
+        return false;
+      }
+      return true;
+    });
+    
+    const postCount = userMessages.length;
+    console.log(`✓ ${channelName} (${targetDate}): ${postCount}件の投稿を確認`);
+    
+    return postCount;
+    
+  } catch (error) {
+    console.error(`❌ ${channelName} の投稿数取得エラー:`, error.message);
+    return -1;
+  }
 }
 
 /**
@@ -196,21 +292,25 @@ async function performModerationCheck() {
     console.log('🔍 モデレーションチェック開始');
     
     const today = format(new Date(), 'yyyy-MM-dd');
-    console.log(`📅 チェック対象日: ${today}`);
+    console.log(`📅 今日の日付: ${today}`);
     
-    // 今日がチェック対象日かどうかを確認
-    if (!isCheckTargetDate(today)) {
-      console.log(`ℹ️ ${today} はチェック対象日ではありません（2日おきのスケジュール）`);
-      return;
+    let targetDate;
+    
+    if (isOddDay(today)) {
+      // 今日が奇数の日の場合、今日の投稿をチェック
+      targetDate = today;
+      console.log(`✓ 今日は奇数の日です。${targetDate} の投稿をチェックします`);
+    } else {
+      // 今日が偶数の日の場合、前の奇数の日の投稿をチェック
+      targetDate = getPreviousOddDay(today);
+      console.log(`ℹ️ 今日は偶数の日です。前の奇数の日 ${targetDate} の投稿をチェックします`);
     }
-    
-    console.log(`✓ ${today} はチェック対象日です`);
     
     // 各チャンネルをチェック
     for (const [channelName, moderationChannel] of Object.entries(CHANNEL_MAPPING)) {
       console.log(`\n--- ${channelName} チェック開始 ---`);
       
-      const postCount = await getChannelPostCount(channelName);
+      const postCount = await checkChannelPostsForDate(channelName, targetDate);
       
       if (postCount === -1) {
         console.log(`⚠️ ${channelName} のチェックをスキップ（エラー）`);
@@ -218,10 +318,10 @@ async function performModerationCheck() {
       }
       
       if (postCount === 0) {
-        console.log(`🚨 ${channelName} に投稿がありません！通知を送信します`);
-        await sendNotificationToModerationTeam(channelName, moderationChannel);
+        console.log(`🚨 ${channelName} に ${targetDate} の投稿がありません！通知を送信します`);
+        await sendNotificationToModerationTeam(channelName, moderationChannel, targetDate);
       } else {
-        console.log(`✅ ${channelName} に ${postCount} 件の投稿があります`);
+        console.log(`✅ ${channelName} に ${targetDate} の投稿が ${postCount} 件あります`);
       }
       
       // API制限を避けるため少し待機
@@ -242,19 +342,20 @@ async function testSchedule() {
   console.log('🧪 スケジュールテスト');
   
   const testDates = [
-    '2025-09-19', // 開始日
-    '2025-09-20', // 1日後（対象外）
-    '2025-09-21', // 2日後（対象）
-    '2025-09-22', // 3日後（対象外）
-    '2025-09-23', // 4日後（対象）
-    '2025-09-30', // 11日後（対象外）
-    '2025-10-01', // 12日後（対象）
+    '2025-09-19', // 奇数の日
+    '2025-09-20', // 偶数の日
+    '2025-09-21', // 奇数の日
+    '2025-09-22', // 偶数の日
+    '2025-09-23', // 奇数の日
+    '2025-09-30', // 偶数の日
+    '2025-10-01', // 奇数の日
   ];
   
-  console.log('チェック対象日の判定結果:');
+  console.log('奇数の日の判定結果:');
   testDates.forEach(date => {
-    const isTarget = isCheckTargetDate(date);
-    console.log(`${date}: ${isTarget ? '✅ 対象' : '❌ 対象外'}`);
+    const isOdd = isOddDay(date);
+    const previousOdd = isOdd ? date : getPreviousOddDay(date);
+    console.log(`${date}: ${isOdd ? '✅ 奇数の日' : '❌ 偶数の日'} ${isOdd ? '' : `(前の奇数の日: ${previousOdd})`}`);
   });
 }
 

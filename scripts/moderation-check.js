@@ -149,17 +149,31 @@ async function getBotUserId() {
 /**
  * 運営チームチャンネルに通知を送信
  */
-async function sendNotificationToModerationTeam(channelName, moderationChannel, targetDate) {
+async function sendNotificationToModerationTeam(channelName, moderationChannel, targetDate, isTodayOdd) {
   try {
     console.log(`📢 ${moderationChannel} に通知を送信中...`);
     
-    const message = `#${channelName} で ${targetDate}（奇数の日）に投稿がありませんでした。ご確認ください。`;
+    let message;
+    
+    if (isTodayOdd) {
+      // 今日が奇数の日の場合
+      message = `リュウクル参上！
+今日は奇数日だぞ。
+まだ今日の投稿がなさそうだから、20時までに忘れずに投下してくれよな。
+オイラ、ちゃんと見張ってるから頼んだぞ！`;
+    } else {
+      // 昨日が奇数の日の場合
+      message = `リュウクル参上！
+オイラのチェックによると、昨日は奇数日なのに投稿ゼロ…。
+これはもったいないぞ。
+今からでも遅くないから、リカバーしてくれよな！`;
+    }
     
     await slack.chat.postMessage({
       channel: moderationChannel,
       text: message,
-      username: 'モデレーションボット',
-      icon_emoji: ':warning:'
+      username: 'リュウクル',
+      icon_emoji: ':dragon:'
     });
     
     console.log(`✓ ${moderationChannel} への通知送信完了`);
@@ -319,7 +333,7 @@ async function performModerationCheck() {
       
       if (postCount === 0) {
         console.log(`🚨 ${channelName} に ${targetDate} の投稿がありません！通知を送信します`);
-        await sendNotificationToModerationTeam(channelName, moderationChannel, targetDate);
+        await sendNotificationToModerationTeam(channelName, moderationChannel, targetDate, isOddDay(today));
       } else {
         console.log(`✅ ${channelName} に ${targetDate} の投稿が ${postCount} 件あります`);
       }

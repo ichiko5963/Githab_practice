@@ -23,19 +23,19 @@ if (!SLACK_BOT_TOKEN && !isTestMode) {
 const slack = new WebClient(SLACK_BOT_TOKEN);
 
 // チャンネル紹介メッセージ
-const CHANNEL_INTRO_MESSAGE = `【チャンネルのご紹介】 @channel
+const CHANNEL_INTRO_MESSAGE = `【チャンネルのご紹介】 <!channel>
 
 リュウクル参上！
 No.7以降のチャンネルには、こんなに面白い部屋が揃ってるぞ。
-	•	#81_chatgpt
-	•	#82_gemini-notebooklm
-	•	#83_claude
-	•	#84_manus-genspark
-	•	#85_suno-udio-veo3-midjourney-sora
-	•	#86_n8n-dify-zapier
-	•	#88_veo3-midjourney-sora
-	•	#91_tkくんのobsidian部屋
-	•	#92_いちのai-agent作ろう部屋
+	•	<#81_chatgpt>
+	•	<#82_gemini-notebooklm>
+	•	<#83_claude>
+	•	<#84_manus-genspark>
+	•	<#85_suno-udio-veo3-midjourney-sora>
+	•	<#86_n8n-dify-zapier>
+	•	<#88_veo3-midjourney-sora>
+	•	<#91_tkくんのobsidian部屋>
+	•	<#92_いちのai-agent作ろう部屋>
 
 AIからツール活用、ノート術まで盛りだくさんだな！
 「チャンネルを追加する ＞ チャンネル一覧 ＞ 参加する」で入れるから、気になるところに飛び込んでみてくれよな。

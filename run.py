@@ -367,8 +367,7 @@ def generate_ryuukuru_report(messages, channel_stats):
     # 投稿数ランキング（上位3位）
     if post_counts:
         for i, (user_id, count) in enumerate(post_counts.most_common(3), 1):
-            user_name = get_user_name(user_id)
-            report += f"\n　{i}位 {user_name}さん：{count}件"
+            report += f"\n　{i}位 <@{user_id}>：{count}件"
     else:
         report += "\n　投稿データなし"
     
@@ -377,8 +376,7 @@ def generate_ryuukuru_report(messages, channel_stats):
     # リアクションをした人ランキング（上位3位）
     if reaction_given_counts:
         for i, (user_id, count) in enumerate(reaction_given_counts.most_common(3), 1):
-            user_name = get_user_name(user_id)
-            report += f"\n　{i}位 {user_name}さん：{count}回のリアクション！"
+            report += f"\n　{i}位 <@{user_id}>：{count}回のリアクション！"
     else:
         report += "\n　リアクションデータなし"
     
@@ -387,8 +385,7 @@ def generate_ryuukuru_report(messages, channel_stats):
     # リアクションを受けた人ランキング（上位3位）
     if reaction_received_counts:
         for i, (user_id, count) in enumerate(reaction_received_counts.most_common(3), 1):
-            user_name = get_user_name(user_id)
-            report += f"\n　{i}位 {user_name}さん：{count}回のリアクション獲得！"
+            report += f"\n　{i}位 <@{user_id}>：{count}回のリアクション獲得！"
     else:
         report += "\n　リアクションデータなし"
     

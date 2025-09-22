@@ -29,11 +29,20 @@ jobs:
           TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL }}
         run: node scripts/channel-intro.js
         
+      - name: Show execution summary
+        if: always()
+        run: |
+          echo "=== 実行結果サマリー ==="
+          echo "SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN != '' && '設定済み' || '未設定' }}"
+          echo "TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL != '' && '設定済み' || '未設定' }}"
+          echo "実行時刻: $(date)"
+        
       - name: Upload logs (if error)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: channel-intro-logs
+          name: channel-intro-logs-${{ github.run_number }}
           path: |
             *.log
             logs/
+          retention-days: 7

@@ -171,9 +171,7 @@ async function sendNotificationToModerationTeam(channelName, moderationChannel, 
     
     await slack.chat.postMessage({
       channel: moderationChannel,
-      text: message,
-      username: 'リュウクル',
-      icon_emoji: ':dragon:'
+      text: message
     });
     
     console.log(`✓ ${moderationChannel} への通知送信完了`);

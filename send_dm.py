@@ -8,12 +8,12 @@ def send_report_to_channel():
     """
     Slack Analyticsの結果を自動化チェックチャンネルに投稿する
     """
-    # 環境変数から設定を取得
-    slack_token = os.getenv('SLACK_API_TOKEN')
-    channel_id = os.getenv('SLACK_REPORT_CHANNEL_ID')
+            # 環境変数から設定を取得
+            slack_token = os.getenv('SLACK_BOT_TOKEN')
+            channel_id = os.getenv('SLACK_REPORT_CHANNEL_ID')
     
     if not slack_token or not channel_id:
-        print("エラー: SLACK_API_TOKEN または SLACK_REPORT_CHANNEL_ID が設定されていません")
+        print("エラー: SLACK_BOT_TOKEN または SLACK_REPORT_CHANNEL_ID が設定されていません")
         return False
     
     client = WebClient(token=slack_token)

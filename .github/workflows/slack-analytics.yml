@@ -25,16 +25,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install slack-sdk pytz
         
-    - name: Run Slack Analytics
-      env:
-        SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
-        CHANNELS_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-      run: |
-        python run.py
-        
-    - name: Send Report to Channel
-      env:
-        SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
-        SLACK_REPORT_CHANNEL_ID: ${{ secrets.SLACK_REPORT_CHANNEL_ID }}
-      run: |
-        python send_dm.py
+            - name: Run Slack Analytics
+              env:
+                SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+                SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+              run: |
+                python run.py
+                
+            - name: Send Report to Channel
+              env:
+                SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+                SLACK_REPORT_CHANNEL_ID: ${{ secrets.SLACK_REPORT_CHANNEL_ID }}
+              run: |
+                python send_dm.py

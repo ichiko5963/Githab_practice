@@ -29,12 +29,10 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-      run: |
-        python run.py
+      run: python run.py
         
     - name: Send Report to Channel
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SLACK_REPORT_CHANNEL_ID: ${{ secrets.SLACK_REPORT_CHANNEL_ID }}
-      run: |
-        python send_dm.py
+      run: python send_dm.py

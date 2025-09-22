@@ -36,6 +36,70 @@ def get_channel_name(channel_id):
         print(f"チャンネル名取得エラー: {e}")
         return f"#{channel_id}"
 
+def get_all_channels():
+    """全てのチャンネルを取得"""
+    try:
+        # パブリックチャンネルを取得
+        public_channels = []
+        cursor = None
+        while True:
+            response = client.conversations_list(
+                types="public_channel",
+                cursor=cursor,
+                limit=1000
+            )
+            if response['ok']:
+                public_channels.extend(response['channels'])
+                cursor = response.get('response_metadata', {}).get('next_cursor')
+                if not cursor:
+                    break
+            else:
+                print(f"パブリックチャンネル取得エラー: {response}")
+                break
+        
+        # プライベートチャンネルを取得
+        private_channels = []
+        cursor = None
+        while True:
+            response = client.conversations_list(
+                types="private_channel",
+                cursor=cursor,
+                limit=1000
+            )
+            if response['ok']:
+                private_channels.extend(response['channels'])
+                cursor = response.get('response_metadata', {}).get('next_cursor')
+                if not cursor:
+                    break
+            else:
+                print(f"プライベートチャンネル取得エラー: {response}")
+                break
+        
+        # 全てのチャンネルを結合
+        all_channels = public_channels + private_channels
+        
+        print(f"取得したチャンネル数: {len(all_channels)}")
+        print(f"パブリックチャンネル: {len(public_channels)}")
+        print(f"プライベートチャンネル: {len(private_channels)}")
+        
+        return all_channels
+        
+    except Exception as e:
+        print(f"チャンネル取得エラー: {e}")
+        return []
+
+def is_bot_user(user_id):
+    """ユーザーがbotかどうかを判定"""
+    try:
+        response = client.users_info(user=user_id)
+        if response['ok']:
+            user_info = response['user']
+            return user_info.get('is_bot', False) or user_info.get('name', '').startswith('bot')
+        return False
+    except Exception as e:
+        print(f"ユーザー情報取得エラー: {e}")
+        return False
+
 def get_user_name(user_id):
     """ユーザーIDからユーザー名を取得"""
     try:
@@ -49,9 +113,6 @@ def get_messages_in_period(channel_id, start_time, end_time):
     """指定期間内のメッセージを取得"""
     messages = []
     cursor = None
-    
-    print(f"Slackデータを取得中...")
-    print(f"期間: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ～ {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     while True:
         try:
@@ -83,6 +144,38 @@ def get_messages_in_period(channel_id, start_time, end_time):
     
     return messages
 
+def get_all_messages_from_all_channels(start_time, end_time):
+    """全てのチャンネルから指定期間内のメッセージを取得"""
+    all_messages = []
+    all_channels = get_all_channels()
+    
+    print(f"Slackデータを取得中...")
+    print(f"期間: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ～ {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"分析対象チャンネル数: {len(all_channels)}")
+    
+    for i, channel in enumerate(all_channels, 1):
+        channel_id = channel['id']
+        channel_name = channel['name']
+        
+        print(f"[{i}/{len(all_channels)}] チャンネル: #{channel_name}")
+        
+        try:
+            messages = get_messages_in_period(channel_id, start_time, end_time)
+            if messages:
+                print(f"  → {len(messages)}件のメッセージを取得")
+                all_messages.extend(messages)
+            else:
+                print(f"  → メッセージなし")
+        except Exception as e:
+            print(f"  → エラー: {e}")
+            continue
+        
+        # API制限を避けるため少し待機
+        time.sleep(0.2)
+    
+    print(f"総取得メッセージ数: {len(all_messages)}")
+    return all_messages
+
 def analyze_reactions(messages):
     """リアクションを分析（リアクションをした人を集計）"""
     reaction_counts = Counter()
@@ -112,7 +205,7 @@ def analyze_reactions_received(messages):
     return reaction_received_counts
 
 def analyze_posts(messages):
-    """投稿数を分析"""
+    """投稿数を分析（bot除外）"""
     post_counts = Counter()
     
     for message in messages:
@@ -122,6 +215,9 @@ def analyze_posts(messages):
         
         user_id = message.get('user')
         if user_id:
+            # botユーザーかどうかをチェック
+            if is_bot_user(user_id):
+                continue
             post_counts[user_id] += 1
     
     return post_counts
@@ -176,8 +272,8 @@ def generate_ryuukuru_report(messages, channel_name):
     
     report += f"""
 
-4. チャンネル活動状況
-　{channel_name}：{len(messages)}件のメッセージ
+4. 全体活動状況
+　全チャンネル合計：{len(messages)}件のメッセージ
 
 これで今週のSlack活動は一目瞭然だな。
 来週もオイラが集計して報告するから、楽しみにしててくれよ！"""
@@ -186,11 +282,8 @@ def generate_ryuukuru_report(messages, channel_name):
 
 def main():
     try:
-        # チャンネル名を取得
-        channel_name = get_channel_name(CHANNELS_ID)
-        
-        # 期間内のメッセージを取得
-        messages = get_messages_in_period(CHANNELS_ID, START_JST, END_JST)
+        # 全チャンネルから期間内のメッセージを取得
+        messages = get_all_messages_from_all_channels(START_JST, END_JST)
         
         if not messages:
             print(f"指定期間内にメッセージが見つかりませんでした。")
@@ -210,8 +303,8 @@ Slack Appの権限設定を確認してくれ！
                 f.write(error_report)
             return
         
-        # リュウクル風レポート生成
-        report = generate_ryuukuru_report(messages, channel_name)
+        # リュウクル風レポート生成（全チャンネル分析）
+        report = generate_ryuukuru_report(messages, "全チャンネル")
         
         # 結果表示
         print(report)

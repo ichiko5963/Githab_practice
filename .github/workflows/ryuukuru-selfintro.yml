@@ -2,11 +2,11 @@ name: Ryuukuru Self Introduction Report
 
 on:
   schedule:
-    # 4日おきに午後17:00 JST (08:00 UTC) に実行
-    # 開始日: 2025年9月22日17:00 JST
+    # 4日おきに午後15:00 JST (06:00 UTC) に実行
+    # 開始日: 2025年9月22日15:00 JST
     # cron: 分 時 日 月 曜日
-    # 4日おきの計算: 0 8 */4 * * (毎4日)
-    - cron: '0 8 */4 * *'
+    # 4日おきの計算: 0 6 */4 * * (毎4日)
+    - cron: '0 6 */4 * *'
   workflow_dispatch: # 手動実行も可能
   push:
     paths:

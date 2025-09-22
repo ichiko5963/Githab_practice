@@ -47,8 +47,8 @@ def get_channel_name(channel_id):
         print(f"チャンネル名取得エラー: {e}")
         return f"#{channel_id}"
 
-def get_target_channels():
-    """指定された7つのチャンネルのみを取得"""
+def get_all_channels():
+    """全てのチャンネルを取得"""
     try:
         # パブリックチャンネルを取得
         public_channels = []
@@ -89,6 +89,21 @@ def get_target_channels():
         # 全てのチャンネルを結合
         all_channels = public_channels + private_channels
         
+        print(f"取得したチャンネル数: {len(all_channels)}")
+        print(f"パブリックチャンネル: {len(public_channels)}")
+        print(f"プライベートチャンネル: {len(private_channels)}")
+        
+        return all_channels
+        
+    except Exception as e:
+        print(f"チャンネル取得エラー: {e}")
+        return []
+
+def get_target_channels():
+    """指定された7つのチャンネルのみを取得"""
+    try:
+        all_channels = get_all_channels()
+        
         # 指定された7つのチャンネルのみをフィルタリング
         target_channels = []
         for channel in all_channels:
@@ -96,7 +111,6 @@ def get_target_channels():
             if channel_name in TARGET_CHANNELS:
                 target_channels.append(channel)
         
-        print(f"取得したチャンネル数: {len(all_channels)}")
         print(f"対象チャンネル数: {len(target_channels)}")
         
         # 見つかったチャンネル名を表示
@@ -170,12 +184,44 @@ def get_messages_in_period(channel_id, start_time, end_time):
     
     return messages
 
-def get_all_messages_from_target_channels(start_time, end_time):
-    """指定された7つのチャンネルから指定期間内のメッセージを取得"""
+def get_all_messages_from_all_channels(start_time, end_time):
+    """全てのチャンネルから指定期間内のメッセージを取得（個人ランキング用）"""
+    all_messages = []
+    all_channels = get_all_channels()
+    
+    print(f"全チャンネルからSlackデータを取得中...")
+    print(f"期間: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ～ {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"分析対象チャンネル数: {len(all_channels)}")
+    
+    for i, channel in enumerate(all_channels, 1):
+        channel_id = channel['id']
+        channel_name = channel['name']
+        
+        print(f"[{i}/{len(all_channels)}] チャンネル: #{channel_name}")
+        
+        try:
+            messages = get_messages_in_period(channel_id, start_time, end_time)
+            if messages:
+                print(f"  → {len(messages)}件のメッセージを取得")
+                all_messages.extend(messages)
+            else:
+                print(f"  → メッセージなし")
+        except Exception as e:
+            print(f"  → エラー: {e}")
+            continue
+        
+        # API制限を避けるため少し待機
+        time.sleep(0.2)
+    
+    print(f"総取得メッセージ数: {len(all_messages)}")
+    return all_messages
+
+def get_messages_from_target_channels(start_time, end_time):
+    """指定された7つのチャンネルから指定期間内のメッセージを取得（チャンネル活動分析用）"""
     all_messages = []
     target_channels = get_target_channels()
     
-    print(f"Slackデータを取得中...")
+    print(f"指定チャンネルからSlackデータを取得中...")
     print(f"期間: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ～ {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"分析対象チャンネル数: {len(target_channels)}")
     
@@ -318,9 +364,9 @@ def generate_ryuukuru_report(messages, channel_stats):
 
 1. 投稿数ランキング"""
     
-    # 投稿数ランキング（上位5位）
+    # 投稿数ランキング（上位3位）
     if post_counts:
-        for i, (user_id, count) in enumerate(post_counts.most_common(5), 1):
+        for i, (user_id, count) in enumerate(post_counts.most_common(3), 1):
             user_name = get_user_name(user_id)
             report += f"\n　{i}位 {user_name}さん：{count}件"
     else:
@@ -336,7 +382,7 @@ def generate_ryuukuru_report(messages, channel_stats):
     else:
         report += "\n　リアクションデータなし"
     
-    report += "\n\n3. リアクションを多く受けた人（人気度）"
+    report += "\n\n3. リアクションを多く受けた人（有益度）"
     
     # リアクションを受けた人ランキング（上位3位）
     if reaction_received_counts:
@@ -365,13 +411,13 @@ def generate_ryuukuru_report(messages, channel_stats):
 
 def main():
     try:
-        # 指定された7つのチャンネルから期間内のメッセージを取得
-        messages = get_all_messages_from_target_channels(START_JST, END_JST)
+        # 個人ランキング用：全チャンネルから期間内のメッセージを取得
+        all_messages = get_all_messages_from_all_channels(START_JST, END_JST)
         
-        # チャンネル活動状況を分析
+        # チャンネル活動状況を分析（指定された7つのチャンネルのみ）
         channel_stats = analyze_channel_activity(START_JST, END_JST)
         
-        if not messages:
+        if not all_messages:
             print(f"指定期間内にメッセージが見つかりませんでした。")
             # エラー時でもレポートファイルを作成
             error_report = f"""リュウクル参上！
@@ -389,8 +435,8 @@ Slack Appの権限設定を確認してくれ！
                 f.write(error_report)
             return
         
-        # リュウクル風レポート生成（指定チャンネル分析）
-        report = generate_ryuukuru_report(messages, channel_stats)
+        # リュウクル風レポート生成（個人ランキングは全チャンネル、チャンネル活動は指定チャンネル）
+        report = generate_ryuukuru_report(all_messages, channel_stats)
         
         # 結果表示
         print(report)

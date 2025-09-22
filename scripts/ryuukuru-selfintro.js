@@ -63,40 +63,68 @@ async function getChannelId(channelIdentifier) {
 }
 
 /**
- * 指定期間のメッセージを取得
+ * 指定期間のメッセージを取得（改善版）
  */
 async function getMessagesInPeriod(channelId, startDate, endDate) {
   try {
-    console.log(`📅 メッセージ取得中: ${format(startDate, 'yyyy-MM-dd')} 〜 ${format(endDate, 'yyyy-MM-dd')}`);
+    console.log(`📅 メッセージ取得中: ${format(startDate, 'yyyy-MM-dd HH:mm')} 〜 ${format(endDate, 'yyyy-MM-dd HH:mm')}`);
     
     const messages = [];
     let cursor = null;
     let hasMore = true;
+    let totalFetched = 0;
+    const maxRetries = 10; // 最大10回までページネーション
+    let retryCount = 0;
     
-    while (hasMore) {
+    while (hasMore && retryCount < maxRetries) {
+      console.log(`📄 ページネーション ${retryCount + 1}回目開始...`);
+      
       const result = await slack.conversations.history({
         channel: channelId,
         oldest: Math.floor(startDate.getTime() / 1000),
         latest: Math.floor(endDate.getTime() / 1000),
         cursor: cursor,
-        limit: 200
+        limit: 200,
+        inclusive: true
       });
       
-      messages.push(...result.messages);
+      const newMessages = result.messages || [];
+      messages.push(...newMessages);
+      totalFetched += newMessages.length;
+      
+      console.log(`📊 このページで取得: ${newMessages.length}件 (累計: ${totalFetched}件)`);
+      
       hasMore = result.has_more;
       cursor = result.response_metadata?.next_cursor;
+      retryCount++;
       
-      console.log(`📊 取得済みメッセージ数: ${messages.length}`);
+      // デバッグ情報
+      if (newMessages.length > 0) {
+        const firstMsg = newMessages[0];
+        const lastMsg = newMessages[newMessages.length - 1];
+        console.log(`📝 最初のメッセージ: ${new Date(firstMsg.ts * 1000).toISOString()}`);
+        console.log(`📝 最後のメッセージ: ${new Date(lastMsg.ts * 1000).toISOString()}`);
+      }
+      
+      // 少し待機（レート制限回避）
+      if (hasMore) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
+    
+    console.log(`📊 全ページネーション完了: 合計 ${totalFetched}件取得`);
     
     // ユーザー情報を取得
     const userIds = [...new Set(messages.map(msg => msg.user).filter(Boolean))];
+    console.log(`👥 ユーザー数: ${userIds.length}人`);
+    
     const userMap = {};
     
     for (const userId of userIds) {
       try {
         const user = await slack.users.info({ user: userId });
         userMap[userId] = user.user;
+        console.log(`👤 ユーザー情報取得: ${user.user.real_name || user.user.display_name}`);
       } catch (error) {
         console.warn(`⚠️ ユーザー情報取得失敗: ${userId}`, error.message);
       }
@@ -105,10 +133,18 @@ async function getMessagesInPeriod(channelId, startDate, endDate) {
     // メッセージにユーザー情報を追加
     const messagesWithUsers = messages.map(msg => ({
       ...msg,
-      userInfo: userMap[msg.user] || { real_name: 'Unknown User', display_name: 'Unknown User' }
+      userInfo: userMap[msg.user] || { real_name: 'Unknown User', display_name: 'Unknown User', id: msg.user }
     }));
     
-    console.log(`✅ ${messagesWithUsers.length}件のメッセージを取得`);
+    console.log(`✅ ${messagesWithUsers.length}件のメッセージを取得完了`);
+    
+    // デバッグ: メッセージの詳細を表示
+    messagesWithUsers.forEach((msg, index) => {
+      const timestamp = new Date(msg.ts * 1000);
+      const userName = msg.userInfo.real_name || msg.userInfo.display_name || 'Unknown';
+      console.log(`📝 メッセージ${index + 1}: ${timestamp.toISOString()} - ${userName}: ${(msg.text || '').substring(0, 50)}...`);
+    });
+    
     return messagesWithUsers;
     
   } catch (error) {
@@ -299,7 +335,7 @@ async function main() {
     // メッセージを取得
     const messages = await getMessagesInPeriod(channelId, startDate, endDate);
     
-    // 自己紹介メッセージをフィルタリング（大幅改善版）
+    // 自己紹介メッセージをフィルタリング（超緩和版）
     const introMessages = messages.filter(msg => {
       const text = (msg.text || '').toLowerCase();
       
@@ -308,12 +344,17 @@ async function main() {
         return false;
       }
       
-      // 短すぎるメッセージを除外（ただし、キーワードがあれば含める）
-      if (!msg.text || msg.text.length < 5) {
+      // 空のメッセージを除外
+      if (!msg.text || msg.text.trim().length === 0) {
         return false;
       }
       
-      // 自己紹介らしいキーワードを含むメッセージを抽出（大幅拡張）
+      // 非常に短いメッセージ（1-2文字）のみ除外
+      if (msg.text.length < 3) {
+        return false;
+      }
+      
+      // 自己紹介らしいキーワードを含むメッセージを抽出（超拡張）
       const introKeywords = [
         // 基本的な自己紹介キーワード
         '自己紹介', 'はじめまして', 'よろしく', '初めまして', 'よろしくお願いします',
@@ -333,18 +374,22 @@ async function main() {
         '紹介', '名乗り', '言います', '申します', 'です', 'ます',
         // その他の一般的なキーワード
         '最近', '今', '現在', 'これから', '将来', '目標', '夢', 'やりたい',
-        'スキル', '技術', 'ツール', 'アプリ', 'サービス', 'プラットフォーム'
+        'スキル', '技術', 'ツール', 'アプリ', 'サービス', 'プラットフォーム',
+        // さらに緩和
+        'です', 'ます', 'だよ', 'だね', 'だな', 'だわ', 'だぞ', 'だぜ',
+        'ですよ', 'ますね', 'ですな', 'ますよ', 'ですわ', 'ますわ'
       ];
       
       // キーワードマッチング
       const hasIntroKeyword = introKeywords.some(keyword => text.includes(keyword));
       
       // 長いメッセージ（自己紹介の可能性が高い）も含める
-      const isLongMessage = msg.text.length > 30;
+      const isLongMessage = msg.text.length > 20;
       
       // 絵文字を含むメッセージ（自己紹介の可能性が高い）
       const hasEmoji = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(msg.text);
       
+      // より緩和した条件：キーワード、長いメッセージ、絵文字のいずれかがあれば含める
       return hasIntroKeyword || isLongMessage || hasEmoji;
     });
     

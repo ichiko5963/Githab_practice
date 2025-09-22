@@ -22,25 +22,45 @@ if (!SLACK_BOT_TOKEN && !isTestMode) {
 // Slackクライアント初期化
 const slack = new WebClient(SLACK_BOT_TOKEN);
 
-// チャンネル紹介メッセージ
-const CHANNEL_INTRO_MESSAGE = `【チャンネルのご紹介】 <!channel>
+// 対象チャンネル名のリスト
+const TARGET_CHANNELS = [
+  '81_chatgpt',
+  '82_gemini-notebooklm', 
+  '83_claude',
+  '84_manus-genspark',
+  '85_suno-udio-veo3-midjourney-sora',
+  '86_n8n-dify-zapier',
+  '88_veo3-midjourney-sora',
+  '91_tkくんのobsidian部屋',
+  '92_いちのai-agent作ろう部屋'
+];
 
-リュウクル参上！
-No.7以降のチャンネルには、こんなに面白い部屋が揃ってるぞ。
-	#81_chatgpt
-	#82_gemini-notebooklm
-	#83_claude
-	#84_manus-genspark
-	#85_suno-udio-veo3-midjourney-sora
-	#86_n8n-dify-zapier
-	#88_veo3-midjourney-sora
-	#91_tkくんのobsidian部屋
-	#92_いちのai-agent作ろう部屋
-
-AIからツール活用、ノート術まで盛りだくさんだな！
-「チャンネルを追加する ＞ チャンネル一覧 ＞ 参加する」で入れるから、気になるところに飛び込んでみてくれよな。
-
-オイラは毎日見張ってるから、みんなの参加を楽しみにしてるぜ！`;
+/**
+ * チャンネルIDを取得
+ */
+async function getChannelIds() {
+  try {
+    console.log('📊 チャンネルIDを取得中...');
+    
+    const channelList = await slack.conversations.list({
+      types: 'public_channel,private_channel',
+      exclude_archived: true,
+      limit: 1000
+    });
+    
+    const channelMap = {};
+    channelList.channels.forEach(channel => {
+      channelMap[channel.name] = channel.id;
+    });
+    
+    console.log(`✅ ${Object.keys(channelMap).length}個のチャンネルIDを取得`);
+    return channelMap;
+    
+  } catch (error) {
+    console.error('❌ チャンネルID取得エラー:', error.message);
+    return {};
+  }
+}
 
 /**
  * チャンネルIDまたはチャンネル名をそのまま使用
@@ -59,11 +79,47 @@ function getChannelIdentifier(channelIdentifier) {
 }
 
 /**
+ * チャンネル紹介メッセージを生成
+ */
+function generateChannelIntroMessage(channelMap) {
+  let channelLinks = '';
+  
+  TARGET_CHANNELS.forEach(channelName => {
+    const channelId = channelMap[channelName];
+    if (channelId) {
+      // チャンネルIDが見つかった場合、クリック可能なリンクを作成
+      channelLinks += `\t<#${channelId}|${channelName}>\n`;
+      console.log(`✅ ${channelName}: ${channelId}`);
+    } else {
+      // チャンネルIDが見つからない場合、フォールバック
+      channelLinks += `\t#${channelName}\n`;
+      console.log(`⚠️ ${channelName}: IDが見つかりません`);
+    }
+  });
+  
+  return `【チャンネルのご紹介】 <!channel>
+
+リュウクル参上！
+No.7以降のチャンネルには、こんなに面白い部屋が揃ってるぞ。
+${channelLinks}
+AIからツール活用、ノート術まで盛りだくさんだな！
+「チャンネルを追加する ＞ チャンネル一覧 ＞ 参加する」で入れるから、気になるところに飛び込んでみてくれよな。
+
+オイラは毎日見張ってるから、みんなの参加を楽しみにしてるぜ！`;
+}
+
+/**
  * チャンネル紹介メッセージを送信
  */
 async function sendChannelIntroMessage() {
   try {
     console.log('📢 チャンネル紹介メッセージを送信中...');
+    
+    // チャンネルIDを取得
+    const channelMap = await getChannelIds();
+    
+    // メッセージを生成
+    const message = generateChannelIntroMessage(channelMap);
     
     // チャンネル識別子を取得（IDまたは名前）
     const channelIdentifier = getChannelIdentifier(TARGET_CHANNEL);
@@ -71,7 +127,7 @@ async function sendChannelIntroMessage() {
     // メッセージを送信
     const result = await slack.chat.postMessage({
       channel: channelIdentifier,
-      text: CHANNEL_INTRO_MESSAGE
+      text: message
     });
     
     console.log(`✅ チャンネル紹介メッセージ送信完了`);
@@ -83,7 +139,7 @@ async function sendChannelIntroMessage() {
   } catch (error) {
     console.error(`❌ メッセージ送信エラー:`, error.message);
     if (error.message.includes('missing_scope')) {
-      console.log(`💡 必要なスコープ: chat:write, channels:write, groups:write`);
+      console.log(`💡 必要なスコープ: chat:write, channels:write, groups:write, channels:read`);
     }
     if (error.message.includes('channel_not_found')) {
       console.log(`💡 チャンネルが見つかりません。チャンネルIDまたは名前を確認してください`);
@@ -100,11 +156,21 @@ async function sendChannelIntroMessage() {
  */
 async function testMode() {
   console.log('🧪 テストモード実行');
-  console.log('送信予定のメッセージ:');
-  console.log('---');
-  console.log(CHANNEL_INTRO_MESSAGE);
-  console.log('---');
-  console.log(`送信先チャンネル: ${TARGET_CHANNEL}`);
+  
+  try {
+    // チャンネルIDを取得してテスト
+    const channelMap = await getChannelIds();
+    const message = generateChannelIntroMessage(channelMap);
+    
+    console.log('送信予定のメッセージ:');
+    console.log('---');
+    console.log(message);
+    console.log('---');
+    console.log(`送信先チャンネル: ${TARGET_CHANNEL}`);
+    
+  } catch (error) {
+    console.error('❌ テストモードエラー:', error.message);
+  }
 }
 
 // メイン実行

@@ -30,6 +30,35 @@ const slack = new WebClient(SLACK_BOT_TOKEN);
 // リマインダー情報を保存するためのメモリストレージ（本番環境ではデータベースを使用推奨）
 const reminders = new Map();
 const pendingConfirmations = new Map(); // 確認待ちのリマインダー
+const processedMessages = new Set(); // 処理済みメッセージのIDを保存
+
+// 処理済みメッセージをファイルに保存する関数
+function saveProcessedMessages() {
+  const fs = require('fs');
+  const data = {
+    messages: Array.from(processedMessages),
+    timestamp: new Date().toISOString()
+  };
+  try {
+    fs.writeFileSync('/tmp/processed_messages.json', JSON.stringify(data));
+  } catch (error) {
+    console.error('❌ 処理済みメッセージの保存エラー:', error.message);
+  }
+}
+
+// 処理済みメッセージをファイルから読み込む関数
+function loadProcessedMessages() {
+  const fs = require('fs');
+  try {
+    const data = fs.readFileSync('/tmp/processed_messages.json', 'utf8');
+    const parsed = JSON.parse(data);
+    processedMessages.clear();
+    parsed.messages.forEach(id => processedMessages.add(id));
+    console.log(`📚 処理済みメッセージを読み込み: ${processedMessages.size}件`);
+  } catch (error) {
+    console.log('📚 処理済みメッセージファイルが見つかりません（初回実行）');
+  }
+}
 
 // AIを使って締切日を抽出する関数
 async function extractDeadlineWithAI(userMessage) {
@@ -294,133 +323,164 @@ function handleConfirmation(userId, channelId) {
   return { success: false, reminderInfo: null };
 }
 
-// Slackのイベントを処理する関数（改良版）
-async function handleSlackEvent(event) {
+// Slack APIをポーリングしてメンションをチェックする関数
+async function checkSlackMentions() {
   try {
-    // メッセージイベントのチェック
-    if (event.type === 'message' && !event.subtype) {
-      const channelId = event.channel;
-      const userId = event.user;
-      const text = event.text;
-      
-      console.log(`📨 メッセージ受信: ${text}`);
-      
-      // ボット自身のメッセージを除外
-      if (userId === event.bot_id) {
-        return;
-      }
-      
-      // キャンセル処理
-      if (text.includes('@Ryucle') && text.includes('キャンセル')) {
-        const cancelledCount = handleCancelRequest(userId, channelId);
-        
-        if (cancelledCount > 0) {
-          await slack.chat.postMessage({
-            channel: channelId,
-            text: `リュウクル参上だぞ🐲🔥\n\n❌ **リマインダーをキャンセルしました！**\n\n${cancelledCount}個のリマインダー設定をキャンセルしたぞ！\n新しいリマインダーを設定したい場合は、もう一度投稿してくれよな🔥`,
-            thread_ts: event.ts
-          });
-        } else {
-          await slack.chat.postMessage({
-            channel: channelId,
-            text: `リュウクル参上だぞ🐲🔥\n\n⚠️ **キャンセルするリマインダーがありません**\n\n確認待ちのリマインダーがないぞ！\n新しいリマインダーを設定したい場合は、もう一度投稿してくれよな🔥`,
-            thread_ts: event.ts
-          });
-        }
-        return;
-      }
-      
-      // 確認処理
-      if (text.toLowerCase().includes('はい') || text.toLowerCase().includes('ok') || text.toLowerCase().includes('設定')) {
-        const result = handleConfirmation(userId, channelId);
-        
-        if (result.success) {
-          const { text: taskText, deadline } = result.reminderInfo;
-          const availableReminders = calculateAvailableReminders(deadline);
-          
-          const reminderList = availableReminders.map(r => 
-            `• ${r.label}: ${r.time.toLocaleString('ja-JP', { timeZone: TZ })}`
-          ).join('\n');
-          
-          await slack.chat.postMessage({
-            channel: channelId,
-            text: `リュウクル参上だぞ🐲🔥\n\n✅ **リマインダー設定完了！**\n\n📝 タスク: ${taskText}\n📅 締切: ${deadline.toLocaleString('ja-JP', { timeZone: TZ })}\n🔔 リマインダー:\n${reminderList}\n\nオイラがちゃんと覚えておくから任せろだぞ🔥\n忘れたらドラゴンの名折れだからな！`,
-            thread_ts: event.ts
-          });
-        } else {
-          await slack.chat.postMessage({
-            channel: channelId,
-            text: `リュウクル参上だぞ🐲🔥\n\n⚠️ **確認待ちのリマインダーがありません**\n\nまずはリマインダーを設定してから確認してくれよな🔥`,
-            thread_ts: event.ts
-          });
-        }
-        return;
-      }
-      
-      // メンション処理
-      if (text.includes('@Ryucle')) {
-        const response = await respondToReminderRequest(text, channelId, userId);
-        
-        await slack.chat.postMessage({
-          channel: channelId,
-          text: response,
-          thread_ts: event.ts
+    console.log('🔍 Slackメンションをチェック中...');
+    
+    // 最近のメッセージを取得（過去1時間）
+    const oneHourAgo = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
+    
+    // 全チャンネルを取得
+    const channelsResponse = await slack.conversations.list({
+      types: 'public_channel,private_channel',
+      limit: 1000
+    });
+    
+    if (!channelsResponse.ok) {
+      console.error('❌ チャンネル取得エラー:', channelsResponse.error);
+      return;
+    }
+    
+    console.log(`📋 ${channelsResponse.channels.length}個のチャンネルをチェック中`);
+    
+    for (const channel of channelsResponse.channels) {
+      try {
+        // チャンネルの最近のメッセージを取得
+        const messagesResponse = await slack.conversations.history({
+          channel: channel.id,
+          oldest: oneHourAgo.toString(),
+          limit: 50
         });
         
-        console.log('✓ メンション返答送信完了');
+        if (!messagesResponse.ok) {
+          console.log(`⚠️ チャンネル ${channel.name} のメッセージ取得エラー:`, messagesResponse.error);
+          continue;
+        }
+        
+        // @Ryucleメンションをチェック
+        for (const message of messagesResponse.messages) {
+          if (message.text && message.text.includes('@Ryucle') && !processedMessages.has(message.ts)) {
+            console.log(`📨 新しい@Ryucleメンションを発見: ${message.text.substring(0, 50)}...`);
+            
+            // メッセージを処理
+            await processMentionMessage(message, channel.id);
+            
+            // 処理済みとしてマーク
+            processedMessages.add(message.ts);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ チャンネル ${channel.name} の処理エラー:`, error.message);
       }
     }
+    
+    // 処理済みメッセージを保存
+    saveProcessedMessages();
+    
   } catch (error) {
-    console.error('❌ Slackイベント処理エラー:', error.message);
+    console.error('❌ Slackメンションチェックエラー:', error.message);
   }
 }
 
-// Express.jsサーバーを起動してSlackイベントを受信
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// JSONパーサーを有効化
-app.use(express.json());
-
-// SlackのURL検証
-app.post('/slack/events', async (req, res) => {
+// メンションメッセージを処理する関数
+async function processMentionMessage(message, channelId) {
   try {
-    const { type, challenge, event } = req.body;
+    const userId = message.user;
+    const text = message.text;
     
-    // URL検証
-    if (type === 'url_verification') {
-      console.log('🔗 Slack URL検証');
-      return res.send(challenge);
+    console.log(`📨 メンション処理: ${text}`);
+    
+    // ボット自身のメッセージを除外
+    if (userId === message.bot_id) {
+      return;
     }
     
-    // イベント処理
-    if (type === 'event_callback' && event) {
-      console.log(`📨 Slackイベント受信: ${event.type}`);
-      await handleSlackEvent(event);
+    // キャンセル処理
+    if (text.includes('@Ryucle') && text.includes('キャンセル')) {
+      const cancelledCount = handleCancelRequest(userId, channelId);
+      
+      if (cancelledCount > 0) {
+        await slack.chat.postMessage({
+          channel: channelId,
+          text: `リュウクル参上だぞ🐲🔥\n\n❌ **リマインダーをキャンセルしました！**\n\n${cancelledCount}個のリマインダー設定をキャンセルしたぞ！\n新しいリマインダーを設定したい場合は、もう一度投稿してくれよな🔥`,
+          thread_ts: message.ts
+        });
+      } else {
+        await slack.chat.postMessage({
+          channel: channelId,
+          text: `リュウクル参上だぞ🐲🔥\n\n⚠️ **キャンセルするリマインダーがありません**\n\n確認待ちのリマインダーがないぞ！\n新しいリマインダーを設定したい場合は、もう一度投稿してくれよな🔥`,
+          thread_ts: message.ts
+        });
+      }
+      return;
     }
     
-    res.status(200).send('OK');
+    // 確認処理
+    if (text.toLowerCase().includes('はい') || text.toLowerCase().includes('ok') || text.toLowerCase().includes('設定')) {
+      const result = handleConfirmation(userId, channelId);
+      
+      if (result.success) {
+        const { text: taskText, deadline } = result.reminderInfo;
+        const availableReminders = calculateAvailableReminders(deadline);
+        
+        const reminderList = availableReminders.map(r => 
+          `• ${r.label}: ${r.time.toLocaleString('ja-JP', { timeZone: TZ })}`
+        ).join('\n');
+        
+        await slack.chat.postMessage({
+          channel: channelId,
+          text: `リュウクル参上だぞ🐲🔥\n\n✅ **リマインダー設定完了！**\n\n📝 タスク: ${taskText}\n📅 締切: ${deadline.toLocaleString('ja-JP', { timeZone: TZ })}\n🔔 リマインダー:\n${reminderList}\n\nオイラがちゃんと覚えておくから任せろだぞ🔥\n忘れたらドラゴンの名折れだからな！`,
+          thread_ts: message.ts
+        });
+      } else {
+        await slack.chat.postMessage({
+          channel: channelId,
+          text: `リュウクル参上だぞ🐲🔥\n\n⚠️ **確認待ちのリマインダーがありません**\n\nまずはリマインダーを設定してから確認してくれよな🔥`,
+          thread_ts: message.ts
+        });
+      }
+      return;
+    }
+    
+    // メンション処理
+    if (text.includes('@Ryucle')) {
+      const response = await respondToReminderRequest(text, channelId, userId);
+      
+      await slack.chat.postMessage({
+        channel: channelId,
+        text: response,
+        thread_ts: message.ts
+      });
+      
+      console.log('✓ メンション返答送信完了');
+    }
   } catch (error) {
-    console.error('❌ Slackイベント処理エラー:', error.message);
-    res.status(500).send('Error');
+    console.error('❌ メンション処理エラー:', error.message);
   }
-});
+}
 
-// ヘルスチェック
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    bot: 'Ryucle Reminder',
-    activeReminders: reminders.size,
-    pendingConfirmations: pendingConfirmations.size
-  });
-});
+// メイン実行関数
+async function main() {
+  try {
+    console.log('🚀 Ryucleリマインダーボットが起動しました！');
+    
+    // 処理済みメッセージを読み込み
+    loadProcessedMessages();
+    
+    // Slackメンションをチェック
+    await checkSlackMentions();
+    
+    console.log('✅ メンションチェック完了');
+    
+  } catch (error) {
+    console.error('❌ メイン実行エラー:', error.message);
+    process.exit(1);
+  }
+}
 
-// サーバー起動
-app.listen(PORT, () => {
-  console.log(`🚀 Ryucleリマインダーボットが起動しました！ポート: ${PORT}`);
-  console.log('📡 Slackイベント待機中...');
-});
+// メイン実行
+main();
 
 // エラーハンドリング
 process.on('uncaughtException', (error) => {
@@ -443,5 +503,9 @@ process.on('SIGINT', () => {
   // 確認待ちのリマインダーをクリア
   pendingConfirmations.clear();
   
+  // 処理済みメッセージを保存
+  saveProcessedMessages();
+  
   process.exit(0);
 });
+

@@ -1,7 +1,9 @@
 name: Ryucle Reminder Bot
 
 on:
-  workflow_dispatch: {}
+  schedule:
+    - cron: '*/5 * * * *'  # 5分ごとに実行
+  workflow_dispatch: {}  # 手動実行も可能
 
 jobs:
   ryucle-reminder:

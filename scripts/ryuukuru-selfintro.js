@@ -330,12 +330,13 @@ async function main() {
     const startDate = subDays(endDate, 4);
     startDate.setHours(15, 0, 0, 0); // 4日前の15:00から開始
     
-    console.log(`📅 対象期間: ${format(startDate, 'yyyy-MM-dd HH:mm')} 〜 ${format(endDate, 'yyyy-MM-dd HH:mm')}`);
+    console.log(`🕐 現在時刻: ${format(now, 'yyyy-MM-dd HH:mm:ss')}`);
+    console.log(`📅 対象期間: ${format(startDate, 'yyyy-MM-dd HH:mm:ss')} 〜 ${format(endDate, 'yyyy-MM-dd HH:mm:ss')}`);
     
     // メッセージを取得
     const messages = await getMessagesInPeriod(channelId, startDate, endDate);
     
-    // 自己紹介メッセージをフィルタリング（超緩和版）
+    // 自己紹介メッセージをフィルタリング（最終版：ほぼ全て含める）
     const introMessages = messages.filter(msg => {
       const text = (msg.text || '').toLowerCase();
       
@@ -349,8 +350,8 @@ async function main() {
         return false;
       }
       
-      // 非常に短いメッセージ（1-2文字）のみ除外
-      if (msg.text.length < 3) {
+      // 1文字のメッセージのみ除外（「。」「！」など）
+      if (msg.text.length < 2) {
         return false;
       }
       
@@ -377,20 +378,25 @@ async function main() {
         'スキル', '技術', 'ツール', 'アプリ', 'サービス', 'プラットフォーム',
         // さらに緩和
         'です', 'ます', 'だよ', 'だね', 'だな', 'だわ', 'だぞ', 'だぜ',
-        'ですよ', 'ますね', 'ですな', 'ますよ', 'ですわ', 'ますわ'
+        'ですよ', 'ますね', 'ですな', 'ますよ', 'ですわ', 'ますわ',
+        // さらに追加
+        'です', 'ます', 'だ', 'です', 'ます', 'です', 'ます'
       ];
       
       // キーワードマッチング
       const hasIntroKeyword = introKeywords.some(keyword => text.includes(keyword));
       
       // 長いメッセージ（自己紹介の可能性が高い）も含める
-      const isLongMessage = msg.text.length > 20;
+      const isLongMessage = msg.text.length > 10;
       
       // 絵文字を含むメッセージ（自己紹介の可能性が高い）
       const hasEmoji = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(msg.text);
       
-      // より緩和した条件：キーワード、長いメッセージ、絵文字のいずれかがあれば含める
-      return hasIntroKeyword || isLongMessage || hasEmoji;
+      // 最終条件：キーワード、長いメッセージ、絵文字のいずれかがあれば含める
+      // または、単純に長いメッセージ（15文字以上）は全て含める
+      const isVeryLongMessage = msg.text.length > 15;
+      
+      return hasIntroKeyword || isLongMessage || hasEmoji || isVeryLongMessage;
     });
     
     console.log(`📊 自己紹介メッセージ: ${introMessages.length}件`);

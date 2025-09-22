@@ -1,10 +1,10 @@
 name: Slack Moderation Check
 
 on:
-  # schedule:
-  #   # 毎日20:00 JST (11:00 UTC) に実行（奇数の日の投稿をチェック）
-  #   - cron: '0 11 * * *'
-  workflow_dispatch: # 手動実行のみ可能
+  schedule:
+    # 毎日20:00 JST (11:00 UTC) に実行（奇数の日の投稿をチェック）
+    - cron: '0 11 * * *'
+  workflow_dispatch: # 手動実行も可能
 
 jobs:
   moderation-check:

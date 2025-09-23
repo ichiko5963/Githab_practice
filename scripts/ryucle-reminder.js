@@ -332,46 +332,47 @@ function handleConfirmation(userId, channelId) {
   return { success: false, reminderInfo: null };
 }
 
-// タスクリマインドチャンネルのメッセージをチェックする関数
-async function checkTaskReminderChannel() {
+// 最新のメッセージをチェックする関数（リアルタイム反応用）
+async function checkLatestMessage() {
   try {
-    console.log('🔍 タスクリマインドチャンネルのメッセージをチェック中...');
+    console.log('🔍 最新メッセージをチェック中...');
     
-    // 最近のメッセージを取得（過去1時間）
-    const oneHourAgo = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
-    
-    // タスクリマインドチャンネルのメッセージを取得
+    // 最新のメッセージを1件だけ取得
     const messagesResponse = await slack.conversations.history({
       channel: TASK_REMINDER_CHANNEL_ID,
-      oldest: oneHourAgo.toString(),
-      limit: 50
+      limit: 1
     });
     
     if (!messagesResponse.ok) {
-      console.error('❌ タスクリマインドチャンネルのメッセージ取得エラー:', messagesResponse.error);
+      console.error('❌ メッセージ取得エラー:', messagesResponse.error);
       return;
     }
     
-    console.log(`📋 タスクリマインドチャンネルで ${messagesResponse.messages.length}件のメッセージをチェック中`);
-    
-    // 全メッセージをチェック（メンション不要）
-    for (const message of messagesResponse.messages) {
-      if (message.text && !processedMessages.has(message.ts)) {
-        console.log(`📨 新しいメッセージを発見: ${message.text.substring(0, 50)}...`);
-        
-        // メッセージを処理
-        await processTaskMessage(message, TASK_REMINDER_CHANNEL_ID);
-        
-        // 処理済みとしてマーク
-        processedMessages.add(message.ts);
-      }
+    if (messagesResponse.messages.length === 0) {
+      console.log('📋 メッセージがありません');
+      return;
     }
     
-    // 処理済みメッセージを保存
-    saveProcessedMessages();
+    const latestMessage = messagesResponse.messages[0];
+    
+    // 処理済みメッセージでない場合のみ処理
+    if (latestMessage.text && !processedMessages.has(latestMessage.ts)) {
+      console.log(`📨 新しいメッセージを発見: ${latestMessage.text.substring(0, 50)}...`);
+      
+      // メッセージを処理
+      await processTaskMessage(latestMessage, TASK_REMINDER_CHANNEL_ID);
+      
+      // 処理済みとしてマーク
+      processedMessages.add(latestMessage.ts);
+      
+      // 処理済みメッセージを保存
+      saveProcessedMessages();
+    } else {
+      console.log('📋 新しいメッセージはありません');
+    }
     
   } catch (error) {
-    console.error('❌ タスクリマインドチャンネルチェックエラー:', error.message);
+    console.error('❌ 最新メッセージチェックエラー:', error.message);
   }
 }
 
@@ -461,11 +462,11 @@ async function main() {
     // 処理済みメッセージを読み込み
     loadProcessedMessages();
     
-    // タスクリマインドチャンネルをチェック
-    console.log('🔍 タスクリマインドチャンネルをチェック開始...');
-    await checkTaskReminderChannel();
+    // 最新メッセージをチェック
+    console.log('🔍 最新メッセージをチェック開始...');
+    await checkLatestMessage();
     
-    console.log('✅ メンションチェック完了');
+    console.log('✅ メッセージチェック完了');
     console.log(`📊 処理済みメッセージ: ${processedMessages.size}件`);
     console.log(`📊 確認待ちリマインダー: ${pendingConfirmations.size}件`);
     console.log(`📊 スケジュール済みリマインダー: ${reminders.size}件`);

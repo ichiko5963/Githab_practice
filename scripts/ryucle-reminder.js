@@ -6,6 +6,7 @@ import fs from 'fs';
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const TZ = 'Asia/Tokyo';
+const TASK_REMINDER_CHANNEL_ID = 'C09EMHVQFPT'; // タスクリマインドチャンネル
 
 // デバッグ情報を出力
 console.log('=== Ryucle リマインダーボット 開始 ===');
@@ -72,10 +73,10 @@ function loadProcessedMessages() {
   }
 }
 
-// AIを使って締切日を抽出する関数
-async function extractDeadlineWithAI(userMessage) {
+// AIを使ってタスクと時間を解析する関数
+async function extractTaskAndTimeWithAI(userMessage) {
   try {
-    console.log(`🤖 AIで締切日を解析中: "${userMessage.substring(0, 50)}..."`);
+    console.log(`🤖 AIでタスクと時間を解析中: "${userMessage.substring(0, 50)}..."`);
     
     const currentDate = new Date();
     const currentDateString = currentDate.toLocaleString('ja-JP', { timeZone: TZ });
@@ -94,19 +95,21 @@ async function extractDeadlineWithAI(userMessage) {
         messages: [
           {
             role: 'system',
-            content: `あなたは日付・時刻の解析専門AIです。
+            content: `あなたはタスクと時間の解析専門AIです。
 
 ユーザーのメッセージから以下の情報を抽出してください：
 
 1. タスク内容（何をするか）
 2. 締切日・期日（具体的な日時）
 3. 現在時刻からの相対的な日数
+4. リマインダーの推奨時間（3日前、1日前、12時間前のうち利用可能なもの）
 
 出力形式（JSON）：
 {
   "task": "タスク内容",
   "deadline": "YYYY-MM-DD HH:MM:SS形式の締切日時",
-  "relativeDays": 数値（現在から何日後か）
+  "relativeDays": 数値（現在から何日後か）,
+  "recommendedReminders": ["3日前", "1日前", "12時間前"]のうち利用可能なもの
 }
 
 注意事項：
@@ -115,23 +118,24 @@ async function extractDeadlineWithAI(userMessage) {
 - 日本時間（JST）で出力
 - 現在時刻は ${currentDateString} です
 - 現在の年は ${currentYear}年、月は ${currentMonth}月、日は ${currentDay}日です
+- リマインダーは締切日時から逆算して、現在時刻より未来のもののみ推奨
 
 例：
 入力: "会議の準備 来週の金曜日"
-出力: {"task": "会議の準備", "deadline": "2025-09-26 23:59:59", "relativeDays": 3}
+出力: {"task": "会議の準備", "deadline": "2025-09-26 23:59:59", "relativeDays": 3, "recommendedReminders": ["3日前", "1日前", "12時間前"]}
 
-入力: "資料作成 12月25日 15:00"
-出力: {"task": "資料作成", "deadline": "2025-12-25 15:00:00", "relativeDays": 93}
+入力: "資料作成 明日 15:00"
+出力: {"task": "資料作成", "deadline": "2025-09-24 15:00:00", "relativeDays": 1, "recommendedReminders": ["12時間前"]}
 
 入力: "プロジェクト締切 10月15日"
-出力: {"task": "プロジェクト締切", "deadline": "2025-10-15 23:59:59", "relativeDays": 22}`
+出力: {"task": "プロジェクト締切", "deadline": "2025-10-15 23:59:59", "relativeDays": 22, "recommendedReminders": ["3日前", "1日前", "12時間前"]}`
           },
           {
             role: 'user',
             content: userMessage
           }
         ],
-        max_tokens: 300,
+        max_tokens: 400,
         temperature: 0.1
       })
     });
@@ -151,7 +155,8 @@ async function extractDeadlineWithAI(userMessage) {
     return {
       task: parsed.task,
       deadline: new Date(parsed.deadline),
-      relativeDays: parsed.relativeDays
+      relativeDays: parsed.relativeDays,
+      recommendedReminders: parsed.recommendedReminders || []
     };
     
   } catch (error) {
@@ -172,8 +177,8 @@ async function parseReminderMessage(text) {
   
   const reminderText = match[1].trim();
   
-  // AIを使って締切日を抽出
-  const aiResult = await extractDeadlineWithAI(reminderText);
+  // AIを使ってタスクと時間を解析
+  const aiResult = await extractTaskAndTimeWithAI(reminderText);
   
   if (!aiResult) {
     return null;
@@ -183,6 +188,7 @@ async function parseReminderMessage(text) {
     text: aiResult.task,
     deadline: aiResult.deadline,
     relativeDays: aiResult.relativeDays,
+    recommendedReminders: aiResult.recommendedReminders,
     createdAt: new Date()
   };
 }
@@ -277,7 +283,7 @@ async function respondToReminderRequest(userMessage, channelId, userId) {
     return `リュウクル参上だぞ🐲🔥\n\nリマインダーの設定方法:\n\`@Ryucle [タスク内容] [締切日時]\`\n\n例: \`@Ryucle 会議の準備 来週の金曜日\`\n\`@Ryucle 資料作成 12月25日 15:00\`\n\n期間は「3日後」「来週の金曜日」「12月25日」などで指定してくれよな🔥`;
   }
   
-  const { text, deadline, relativeDays } = reminderInfo;
+  const { text, deadline, relativeDays, recommendedReminders } = reminderInfo;
   const availableReminders = calculateAvailableReminders(deadline);
   
   if (availableReminders.length === 0) {
@@ -335,55 +341,38 @@ function handleConfirmation(userId, channelId) {
   return { success: false, reminderInfo: null };
 }
 
-// Slack APIをポーリングしてメンションをチェックする関数
-async function checkSlackMentions() {
+// タスクリマインドチャンネルのメッセージをチェックする関数
+async function checkTaskReminderChannel() {
   try {
-    console.log('🔍 Slackメンションをチェック中...');
+    console.log('🔍 タスクリマインドチャンネルのメッセージをチェック中...');
     
     // 最近のメッセージを取得（過去1時間）
     const oneHourAgo = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
     
-    // 全チャンネルを取得
-    const channelsResponse = await slack.conversations.list({
-      types: 'public_channel,private_channel',
-      limit: 1000
+    // タスクリマインドチャンネルのメッセージを取得
+    const messagesResponse = await slack.conversations.history({
+      channel: TASK_REMINDER_CHANNEL_ID,
+      oldest: oneHourAgo.toString(),
+      limit: 50
     });
     
-    if (!channelsResponse.ok) {
-      console.error('❌ チャンネル取得エラー:', channelsResponse.error);
+    if (!messagesResponse.ok) {
+      console.error('❌ タスクリマインドチャンネルのメッセージ取得エラー:', messagesResponse.error);
       return;
     }
     
-    console.log(`📋 ${channelsResponse.channels.length}個のチャンネルをチェック中`);
+    console.log(`📋 タスクリマインドチャンネルで ${messagesResponse.messages.length}件のメッセージをチェック中`);
     
-    for (const channel of channelsResponse.channels) {
-      try {
-        // チャンネルの最近のメッセージを取得
-        const messagesResponse = await slack.conversations.history({
-          channel: channel.id,
-          oldest: oneHourAgo.toString(),
-          limit: 50
-        });
+    // @Ryucleメンションをチェック
+    for (const message of messagesResponse.messages) {
+      if (message.text && message.text.includes('@Ryucle') && !processedMessages.has(message.ts)) {
+        console.log(`📨 新しい@Ryucleメンションを発見: ${message.text.substring(0, 50)}...`);
         
-        if (!messagesResponse.ok) {
-          console.log(`⚠️ チャンネル ${channel.name} のメッセージ取得エラー:`, messagesResponse.error);
-          continue;
-        }
+        // メッセージを処理
+        await processMentionMessage(message, TASK_REMINDER_CHANNEL_ID);
         
-        // @Ryucleメンションをチェック
-        for (const message of messagesResponse.messages) {
-          if (message.text && message.text.includes('@Ryucle') && !processedMessages.has(message.ts)) {
-            console.log(`📨 新しい@Ryucleメンションを発見: ${message.text.substring(0, 50)}...`);
-            
-            // メッセージを処理
-            await processMentionMessage(message, channel.id);
-            
-            // 処理済みとしてマーク
-            processedMessages.add(message.ts);
-          }
-        }
-      } catch (error) {
-        console.error(`❌ チャンネル ${channel.name} の処理エラー:`, error.message);
+        // 処理済みとしてマーク
+        processedMessages.add(message.ts);
       }
     }
     
@@ -391,7 +380,7 @@ async function checkSlackMentions() {
     saveProcessedMessages();
     
   } catch (error) {
-    console.error('❌ Slackメンションチェックエラー:', error.message);
+    console.error('❌ タスクリマインドチャンネルチェックエラー:', error.message);
   }
 }
 
@@ -481,9 +470,9 @@ async function main() {
     // 処理済みメッセージを読み込み
     loadProcessedMessages();
     
-    // Slackメンションをチェック
-    console.log('🔍 Slackメンションをチェック開始...');
-    await checkSlackMentions();
+    // タスクリマインドチャンネルをチェック
+    console.log('🔍 タスクリマインドチャンネルをチェック開始...');
+    await checkTaskReminderChannel();
     
     console.log('✅ メンションチェック完了');
     console.log(`📊 処理済みメッセージ: ${processedMessages.size}件`);

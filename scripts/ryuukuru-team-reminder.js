@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api';
-import { utcToZonedTime } from 'date-fns-tz';
+import { toZonedTime } from 'date-fns-tz';
 
 // Env vars
 const slackToken = process.env.SLACK_BOT_TOKEN;
@@ -38,7 +38,7 @@ const RYUUKURU_CONFIG = {
  * @returns {Date} 日本時間の現在日時
  */
 function getCurrentDate() {
-  return utcToZonedTime(new Date(), timezone);
+  return toZonedTime(new Date(), timezone);
 }
 
 /**

@@ -20,7 +20,9 @@ async function sendWeeklyMeetingReminder() {
   try {
     console.log('リュークル週例ミーティングリマインドを送信中...');
 
-    const message = `リュウクル参上！！🐲🔥
+    const message = `@channel
+
+リュウクル参上！！🐲🔥
 
 今週の定例どうだった？みんなちゃんと参加できたか？
 もし参加できなかったやつは、議事録を必ず見ろよ！

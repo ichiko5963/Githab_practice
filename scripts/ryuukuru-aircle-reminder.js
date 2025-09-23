@@ -35,7 +35,9 @@ function getCurrentDate() {
  * @returns {string} リマインドメッセージ
  */
 function generateWeeklyMeetingReminderMessage() {
-  return `${RYUUKURU_CONFIG.catchphrase}
+  return `@channel
+
+${RYUUKURU_CONFIG.catchphrase}
 
 今週の定例どうだった？みんなちゃんと参加できたか？
 もし参加できなかったやつは、議事録を必ず見ろよ！

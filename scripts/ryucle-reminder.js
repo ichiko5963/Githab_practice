@@ -332,47 +332,28 @@ function handleConfirmation(userId, channelId) {
   return { success: false, reminderInfo: null };
 }
 
-// 最新のメッセージをチェックする関数（リアルタイム反応用）
-async function checkLatestMessage() {
+// Slackのイベントを処理する関数
+async function handleSlackEvent(event) {
   try {
-    console.log('🔍 最新メッセージをチェック中...');
+    console.log('📨 Slackイベントを受信:', event.type);
     
-    // 最新のメッセージを1件だけ取得
-    const messagesResponse = await slack.conversations.history({
-      channel: TASK_REMINDER_CHANNEL_ID,
-      limit: 1
-    });
-    
-    if (!messagesResponse.ok) {
-      console.error('❌ メッセージ取得エラー:', messagesResponse.error);
-      return;
-    }
-    
-    if (messagesResponse.messages.length === 0) {
-      console.log('📋 メッセージがありません');
-      return;
-    }
-    
-    const latestMessage = messagesResponse.messages[0];
-    
-    // 処理済みメッセージでない場合のみ処理
-    if (latestMessage.text && !processedMessages.has(latestMessage.ts)) {
-      console.log(`📨 新しいメッセージを発見: ${latestMessage.text.substring(0, 50)}...`);
+    // メッセージイベントの場合
+    if (event.type === 'message') {
+      // ボット自身のメッセージを除外
+      if (event.bot_id) {
+        return;
+      }
       
-      // メッセージを処理
-      await processTaskMessage(latestMessage, TASK_REMINDER_CHANNEL_ID);
-      
-      // 処理済みとしてマーク
-      processedMessages.add(latestMessage.ts);
-      
-      // 処理済みメッセージを保存
-      saveProcessedMessages();
-    } else {
-      console.log('📋 新しいメッセージはありません');
+      // タスクリマインドチャンネルのメッセージのみ処理
+      if (event.channel === TASK_REMINDER_CHANNEL_ID) {
+        console.log(`📨 タスクリマインドチャンネルでメッセージ受信: ${event.text?.substring(0, 50)}...`);
+        
+        // メッセージを処理
+        await processTaskMessage(event, TASK_REMINDER_CHANNEL_ID);
+      }
     }
-    
   } catch (error) {
-    console.error('❌ 最新メッセージチェックエラー:', error.message);
+    console.error('❌ Slackイベント処理エラー:', error.message);
   }
 }
 
@@ -453,33 +434,61 @@ async function processTaskMessage(message, channelId) {
   }
 }
 
-// メイン実行関数
-async function main() {
-  try {
-    console.log('🚀 Ryucleリマインダーボットが起動しました！');
-    console.log(`📅 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: TZ })}`);
-    
-    // 処理済みメッセージを読み込み
-    loadProcessedMessages();
-    
-    // 最新メッセージをチェック
-    console.log('🔍 最新メッセージをチェック開始...');
-    await checkLatestMessage();
-    
-    console.log('✅ メッセージチェック完了');
-    console.log(`📊 処理済みメッセージ: ${processedMessages.size}件`);
-    console.log(`📊 確認待ちリマインダー: ${pendingConfirmations.size}件`);
-    console.log(`📊 スケジュール済みリマインダー: ${reminders.size}件`);
-    
-  } catch (error) {
-    console.error('❌ メイン実行エラー:', error.message);
-    console.error('❌ スタックトレース:', error.stack);
-    process.exit(1);
-  }
-}
+// Express.jsサーバーを起動してSlackイベントを受信
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// メイン実行
-main();
+// JSONパーサーを有効化
+app.use(express.json());
+
+// SlackのURL検証
+app.post('/slack/events', async (req, res) => {
+  try {
+    const { type, challenge, event } = req.body;
+    
+    // URL検証
+    if (type === 'url_verification') {
+      console.log('🔗 Slack URL検証:', challenge);
+      return res.send(challenge);
+    }
+    
+    // イベントコールバック
+    if (type === 'event_callback' && event) {
+      console.log('📨 Slackイベントコールバック受信');
+      await handleSlackEvent(event);
+      return res.status(200).send('OK');
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('❌ Slackイベント処理エラー:', error.message);
+    res.status(500).send('Error');
+  }
+});
+
+// ヘルスチェック
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    bot: 'Ryucle Reminder',
+    timestamp: new Date().toISOString(),
+    processedMessages: processedMessages.size,
+    pendingConfirmations: pendingConfirmations.size,
+    scheduledReminders: reminders.size
+  });
+});
+
+// サーバー起動
+app.listen(PORT, () => {
+  console.log(`🚀 Ryucleリマインダーボットが起動しました！ポート: ${PORT}`);
+  console.log(`📅 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: TZ })}`);
+  console.log('📡 Slackイベント待機中...');
+  console.log(`🔗 Webhook URL: http://localhost:${PORT}/slack/events`);
+  console.log(`❤️ ヘルスチェック: http://localhost:${PORT}/health`);
+  
+  // 処理済みメッセージを読み込み
+  loadProcessedMessages();
+});
 
 // エラーハンドリング
 process.on('uncaughtException', (error) => {

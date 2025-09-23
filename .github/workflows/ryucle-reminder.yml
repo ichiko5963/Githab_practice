@@ -1,14 +1,12 @@
 name: Ryucle Reminder Bot
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'  # 5分ごとに実行
-  workflow_dispatch: {}  # 手動実行も可能
+  workflow_dispatch: {}  # 手動実行のみ（サーバー起動用）
 
 jobs:
   ryucle-reminder:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # タイムアウト設定
+    timeout-minutes: 0  # タイムアウト無効（常時稼働）
     
     steps:
       - name: Checkout

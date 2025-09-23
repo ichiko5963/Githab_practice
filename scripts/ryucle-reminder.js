@@ -1,5 +1,6 @@
 import { WebClient } from '@slack/web-api';
 import express from 'express';
+import fs from 'fs';
 
 // 設定
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
@@ -34,7 +35,6 @@ const processedMessages = new Set(); // 処理済みメッセージのIDを保�
 
 // 処理済みメッセージをファイルに保存する関数
 function saveProcessedMessages() {
-  const fs = require('fs');
   const data = {
     messages: Array.from(processedMessages),
     timestamp: new Date().toISOString()
@@ -48,7 +48,6 @@ function saveProcessedMessages() {
 
 // 処理済みメッセージをファイルから読み込む関数
 function loadProcessedMessages() {
-  const fs = require('fs');
   try {
     const data = fs.readFileSync('/tmp/processed_messages.json', 'utf8');
     const parsed = JSON.parse(data);

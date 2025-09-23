@@ -1,6 +1,6 @@
 import { WebClient } from '@slack/web-api';
 import { parseISO, subWeeks, subDays, subHours, isWithinInterval, format } from 'date-fns';
-import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 // Env vars
 const slackToken = process.env.SLACK_BOT_TOKEN;
@@ -40,7 +40,7 @@ const ymdSlashOrDashHm = /(\d{4})[-\/]?(\d{1,2})[-\/]?(\d{1,2})\s+(\d{1,2}):(\d{
 const mdJpHm = /(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(?:(午前|午後)\s*)?(\d{1,2})(?:[:：時](\d{1,2}))?\s*(?:分)?/;
 
 function buildDateFromParts(parts) {
-  const now = utcToZonedTime(new Date(), timezone);
+  const now = toZonedTime(new Date(), timezone);
   let { year, month, day, hour = 0, minute = 0, ampm } = parts;
   if (!year) year = now.getFullYear();
   // AM/PM adjust
@@ -51,13 +51,13 @@ function buildDateFromParts(parts) {
   // month is 1-12, JS wants 0-11
   const candidate = new Date(year, month - 1, day, hour, minute, 0, 0);
   // Convert from local TZ to UTC to keep consistent interpretation
-  const utcDate = zonedTimeToUtc(candidate, timezone);
+  const utcDate = fromZonedTime(candidate, timezone);
   // If year was omitted and the time has already passed, assume next year
   if (!parts.year) {
     const nowUtc = new Date();
     if (utcDate < nowUtc) {
       const candidateNext = new Date(year + 1, month - 1, day, hour, minute, 0, 0);
-      return zonedTimeToUtc(candidateNext, timezone);
+      return fromZonedTime(candidateNext, timezone);
     }
   }
   return utcDate;
@@ -132,8 +132,8 @@ function extractDateTime(text) {
 function isOneWeekBefore(now, targetDate) {
   const weekBefore = subWeeks(targetDate, 1);
   // Remind when now is within the same day as weekBefore (in local tz)
-  const zonedNow = utcToZonedTime(now, timezone);
-  const zonedWeekBefore = utcToZonedTime(weekBefore, timezone);
+  const zonedNow = toZonedTime(now, timezone);
+  const zonedWeekBefore = toZonedTime(weekBefore, timezone);
   const start = new Date(zonedWeekBefore);
   start.setHours(0, 0, 0, 0);
   const end = new Date(zonedWeekBefore);
@@ -143,8 +143,8 @@ function isOneWeekBefore(now, targetDate) {
 
 function isOneDayBefore(now, targetDate) {
   const dayBefore = subDays(targetDate, 1);
-  const zonedNow = utcToZonedTime(now, timezone);
-  const zonedDayBefore = utcToZonedTime(dayBefore, timezone);
+  const zonedNow = toZonedTime(now, timezone);
+  const zonedDayBefore = toZonedTime(dayBefore, timezone);
   const start = new Date(zonedDayBefore);
   start.setHours(0, 0, 0, 0);
   const end = new Date(zonedDayBefore);
@@ -155,11 +155,11 @@ function isOneDayBefore(now, targetDate) {
 function isThreeHoursBefore(now, targetDate) {
   // Use a window to handle periodic runs. Default window 20 minutes.
   const threeHoursBefore = subHours(targetDate, 3);
-  const zonedThreeHoursBefore = utcToZonedTime(threeHoursBefore, timezone);
+  const zonedThreeHoursBefore = toZonedTime(threeHoursBefore, timezone);
   const start = new Date(zonedThreeHoursBefore);
   const end = new Date(zonedThreeHoursBefore);
   end.setMinutes(end.getMinutes() + 20);
-  const zonedNow = utcToZonedTime(now, timezone);
+  const zonedNow = toZonedTime(now, timezone);
   return isWithinInterval(zonedNow, { start, end });
 }
 
@@ -196,7 +196,7 @@ async function hasPostedReminder(threadTs, marker) {
 
 async function postReminderIfNeeded(message, targetDate) {
   const now = new Date();
-  const formattedTarget = format(utcToZonedTime(targetDate, timezone), 'yyyy-MM-dd HH:mm');
+  const formattedTarget = format(toZonedTime(targetDate, timezone), 'yyyy-MM-dd HH:mm');
   const threadTs = message.thread_ts || message.ts;
 
   // 1 week

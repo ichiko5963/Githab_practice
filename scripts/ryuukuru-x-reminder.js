@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api';
-import { utcToZonedTime } from 'date-fns-tz';
+import { toZonedTime } from 'date-fns-tz';
 
 // Env vars
 const slackToken = process.env.SLACK_BOT_TOKEN;
@@ -33,7 +33,7 @@ const MENTION_USERS = {
  * @returns {boolean} 奇数日の場合true
  */
 function isOddDay() {
-  const now = utcToZonedTime(new Date(), timezone);
+  const now = toZonedTime(new Date(), timezone);
   const day = now.getDate();
   return day % 2 === 1;
 }
@@ -110,7 +110,7 @@ async function main() {
   }
 
   // 現在時刻を取得
-  const now = utcToZonedTime(new Date(), timezone);
+  const now = toZonedTime(new Date(), timezone);
   const currentTime = now.toLocaleString('ja-JP', { 
     timeZone: timezone,
     year: 'numeric',

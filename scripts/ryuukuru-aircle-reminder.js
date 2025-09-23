@@ -3,7 +3,7 @@ import { toZonedTime } from 'date-fns-tz';
 
 // Env vars
 const slackToken = process.env.SLACK_BOT_TOKEN;
-const channelId = process.env.SLACK_AIRCLE_MEETING_CHANNEL_ID || 'C09BNPB16KW'; // #aircle-週例mtg
+const channelId = process.env.SLACK_AIRCLE_CHANNEL_ID || 'C09BNPB16KW'; // #aircle-人材交流部
 const timezone = process.env.TZ || 'Asia/Tokyo';
 
 if (!slackToken) {
@@ -35,22 +35,36 @@ function getCurrentDate() {
  * @returns {string} リマインドメッセージ
  */
 function generateWeeklyMeetingReminderMessage() {
+  const now = getCurrentDate();
+  const dayOfWeek = now.toLocaleDateString('ja-JP', { weekday: 'long' });
+  
   return `@channel
 
-${RYUUKURU_CONFIG.catchphrase}
+リュウクル参上！！
 
-今週の定例どうだった？みんなちゃんと参加できたか？
-もし参加できなかったやつは、議事録を必ず見ろよ！
+今日は週の${dayOfWeek}、19時のリマインドタイムだぞ！
+交流会の準備はちゃんと進んでるか？
 
-議事録はいちおかが投稿してるはずだ。
-このチャンネルに上がってるから確認しろ！
-もしまだ投稿されてなかったら、いちおかにリマインドして必ず送らせろ！
+✅ 企画内容をしっかり詰めたか？
+✅ Slackに【告知文＋画像】を投稿したか？
+✅ 集客に向けてDMや追加告知をやったか？
 
-そして大事なのはこれだ👇
-議事録を見たら必ずリアクションをつけろ！👀
-「見た証拠」が残らないと意味がないからな！
+もしまだなら👇
+- まずは3人でミーティングを組んで企画を詰めろ！
+- Slackに告知投稿を忘れるな！
+- 集客目標が危うければ、今すぐ声かけを増やせ！
 
-${RYUUKURU_CONFIG.ending}`;
+さらに大事なのがここだ👇
+この入会フォーム（スプレッドシート）をチェックしろ！
+https://docs.google.com/spreadsheets/d/1ZP9Of73A1FXZ1-EVKdeVHzV56MN7RWrd3bsNWyL-4zE/edit?usp=sharing
+
+まだ面談やアプローチをしていない仲間がいたら、
+@みおり（運営）、必ずチェックしてタスクを振ってくれ！
+そして他のメンバーに1on1の日程調整を任せて、誰がやるか決めろ！
+
+仲間が増えるのは最高に嬉しいことだ！
+リュークル応援してるぞ！
+ご視聴ありがとうございました！`;
 }
 
 /**

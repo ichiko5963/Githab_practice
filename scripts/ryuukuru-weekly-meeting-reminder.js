@@ -50,6 +50,7 @@ async function sendWeeklyMeetingReminder() {
     const result = await slack.chat.postMessage({
       channel: channelId,
       text: message,
+      link_names: true,
       username: 'リュークル',
       icon_emoji: ':dragon:'
     });

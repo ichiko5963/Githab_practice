@@ -62,6 +62,7 @@ async function postReminderMessage(message) {
     const result = await client.chat.postMessage({
       channel: channelId,
       text: message,
+      link_names: true,
       unfurl_links: false,
       unfurl_media: false
     });

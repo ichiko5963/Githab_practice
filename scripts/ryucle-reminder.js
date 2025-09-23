@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api';
-import express from 'express';
+import fs from 'fs';
 
 // 設定
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
@@ -30,6 +30,46 @@ const slack = new WebClient(SLACK_BOT_TOKEN);
 
 // リマインダー情報を保存するためのメモリストレージ
 const reminders = new Map();
+const processedMessages = new Set(); // 処理済みメッセージのIDを保存
+
+// 処理済みメッセージをファイルに保存する関数
+function saveProcessedMessages() {
+  const data = {
+    messages: Array.from(processedMessages),
+    timestamp: new Date().toISOString()
+  };
+  try {
+    const dataDir = '/tmp/ryucle-data';
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(`${dataDir}/processed_messages.json`, JSON.stringify(data, null, 2));
+    console.log(`📚 処理済みメッセージを保存: ${processedMessages.size}件`);
+  } catch (error) {
+    console.error('❌ 処理済みメッセージの保存エラー:', error.message);
+  }
+}
+
+// 処理済みメッセージをファイルから読み込む関数
+function loadProcessedMessages() {
+  try {
+    const dataDir = '/tmp/ryucle-data';
+    const filePath = `${dataDir}/processed_messages.json`;
+    
+    if (!fs.existsSync(filePath)) {
+      console.log('📚 処理済みメッセージファイルが見つかりません（初回実行）');
+      return;
+    }
+    
+    const data = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(data);
+    processedMessages.clear();
+    parsed.messages.forEach(id => processedMessages.add(id));
+    console.log(`📚 処理済みメッセージを読み込み: ${processedMessages.size}件`);
+  } catch (error) {
+    console.log('📚 処理済みメッセージファイルの読み込みエラー:', error.message);
+  }
+}
 
 // AIを使ってタスクと時間を解析する関数
 async function extractTaskAndTimeWithAI(userMessage) {
@@ -173,28 +213,47 @@ function scheduleReminders(reminderId, taskText, deadline, channelId, originalMe
   return scheduledReminders.length;
 }
 
-// Slackのイベントを処理する関数
-async function handleSlackEvent(event) {
+// 最新のメッセージをチェックする関数
+async function checkLatestMessage() {
   try {
-    console.log('📨 Slackイベントを受信:', event.type);
+    console.log('🔍 最新メッセージをチェック中...');
     
-    // メッセージイベントの場合
-    if (event.type === 'message') {
-      // ボット自身のメッセージを除外
-      if (event.bot_id) {
-        return;
-      }
-      
-      // タスクリマインドチャンネルのメッセージのみ処理
-      if (event.channel === TASK_REMINDER_CHANNEL_ID) {
-        console.log(`📨 タスクリマインドチャンネルでメッセージ受信: ${event.text?.substring(0, 50)}...`);
-        
-        // メッセージを処理
-        await processTaskMessage(event);
-      }
+    // 最新のメッセージを1件だけ取得
+    const messagesResponse = await slack.conversations.history({
+      channel: TASK_REMINDER_CHANNEL_ID,
+      limit: 1
+    });
+    
+    if (!messagesResponse.ok) {
+      console.error('❌ メッセージ取得エラー:', messagesResponse.error);
+      return;
     }
+    
+    if (messagesResponse.messages.length === 0) {
+      console.log('📋 メッセージがありません');
+      return;
+    }
+    
+    const latestMessage = messagesResponse.messages[0];
+    
+    // 処理済みメッセージでない場合のみ処理
+    if (latestMessage.text && !processedMessages.has(latestMessage.ts)) {
+      console.log(`📨 新しいメッセージを発見: ${latestMessage.text.substring(0, 50)}...`);
+      
+      // メッセージを処理
+      await processTaskMessage(latestMessage);
+      
+      // 処理済みとしてマーク
+      processedMessages.add(latestMessage.ts);
+      
+      // 処理済みメッセージを保存
+      saveProcessedMessages();
+    } else {
+      console.log('📋 新しいメッセージはありません');
+    }
+    
   } catch (error) {
-    console.error('❌ Slackイベント処理エラー:', error.message);
+    console.error('❌ 最新メッセージチェックエラー:', error.message);
   }
 }
 
@@ -206,6 +265,12 @@ async function processTaskMessage(message) {
     const channelId = message.channel;
     
     console.log(`📨 タスクメッセージ処理: ${text}`);
+    
+    // ボット自身のメッセージを除外
+    if (message.bot_id) {
+      console.log('🤖 ボット自身のメッセージのためスキップ');
+      return;
+    }
     
     // AIを使ってタスクと時間を解析
     const aiResult = await extractTaskAndTimeWithAI(text);
@@ -246,56 +311,32 @@ async function processTaskMessage(message) {
   }
 }
 
-// Express.jsサーバーを起動してSlackイベントを受信
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// JSONパーサーを有効化
-app.use(express.json());
-
-// SlackのURL検証
-app.post('/slack/events', async (req, res) => {
+// メイン実行関数
+async function main() {
   try {
-    const { type, challenge, event } = req.body;
+    console.log('🚀 Ryucleリマインダーボットが起動しました！');
+    console.log(`📅 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: TZ })}`);
     
-    // URL検証
-    if (type === 'url_verification') {
-      console.log('🔗 Slack URL検証:', challenge);
-      return res.send(challenge);
-    }
+    // 処理済みメッセージを読み込み
+    loadProcessedMessages();
     
-    // イベントコールバック
-    if (type === 'event_callback' && event) {
-      console.log('📨 Slackイベントコールバック受信');
-      await handleSlackEvent(event);
-      return res.status(200).send('OK');
-    }
+    // 最新メッセージをチェック
+    console.log('🔍 最新メッセージをチェック開始...');
+    await checkLatestMessage();
     
-    res.status(200).send('OK');
+    console.log('✅ メッセージチェック完了');
+    console.log(`📊 処理済みメッセージ: ${processedMessages.size}件`);
+    console.log(`📊 スケジュール済みリマインダー: ${reminders.size}件`);
+    
   } catch (error) {
-    console.error('❌ Slackイベント処理エラー:', error.message);
-    res.status(500).send('Error');
+    console.error('❌ メイン実行エラー:', error.message);
+    console.error('❌ スタックトレース:', error.stack);
+    process.exit(1);
   }
-});
+}
 
-// ヘルスチェック
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    bot: 'Ryucle Reminder',
-    timestamp: new Date().toISOString(),
-    scheduledReminders: reminders.size
-  });
-});
-
-// サーバー起動
-app.listen(PORT, () => {
-  console.log(`🚀 Ryucleリマインダーボットが起動しました！ポート: ${PORT}`);
-  console.log(`📅 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: TZ })}`);
-  console.log('📡 Slackイベント待機中...');
-  console.log(`🔗 Webhook URL: http://localhost:${PORT}/slack/events`);
-  console.log(`❤️ ヘルスチェック: http://localhost:${PORT}/health`);
-});
+// メイン実行
+main();
 
 // エラーハンドリング
 process.on('uncaughtException', (error) => {
@@ -314,6 +355,9 @@ process.on('SIGINT', () => {
   reminders.forEach(timeoutIds => {
     timeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
   });
+  
+  // 処理済みメッセージを保存
+  saveProcessedMessages();
   
   console.log('✅ クリーンアップ完了');
   process.exit(0);

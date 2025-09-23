@@ -1,0 +1,63 @@
+name: Ryuukuru Team Reminder
+
+on:
+  schedule:
+    # 毎月 24日・27日・30日・3日・6日 の 13:00 JST (04:00 UTC) に実行
+    # cron: 分 時 日 月 曜日
+    - cron: '0 4 24,27,30,3,6 * *'
+  workflow_dispatch: # 手動実行も可能
+  push:
+    paths:
+      - 'scripts/ryuukuru-team-reminder.js'
+      - '.github/workflows/ryuukuru-team-reminder.yml'
+
+concurrency:
+  group: ryuukuru-team-reminder
+  cancel-in-progress: true
+
+jobs:
+  ryuukuru-team-reminder:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run Ryuukuru Team Reminder
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHATGPT_TEAM_CHANNEL_ID: ${{ secrets.SLACK_CHATGPT_TEAM_CHANNEL_ID }}
+          SLACK_CLAUDE_TEAM_CHANNEL_ID: ${{ secrets.SLACK_CLAUDE_TEAM_CHANNEL_ID }}
+          SLACK_GEMINI_TEAM_CHANNEL_ID: ${{ secrets.SLACK_GEMINI_TEAM_CHANNEL_ID }}
+          SLACK_GENSPARK_MANUS_TEAM_CHANNEL_ID: ${{ secrets.SLACK_GENSPARK_MANUS_TEAM_CHANNEL_ID }}
+          SLACK_N8N_DIFY_ZAPIER_TEAM_CHANNEL_ID: ${{ secrets.SLACK_N8N_DIFY_ZAPIER_TEAM_CHANNEL_ID }}
+          SLACK_SUNO_TEAM_CHANNEL_ID: ${{ secrets.SLACK_SUNO_TEAM_CHANNEL_ID }}
+          SLACK_IMAGE_AI_TEAM_CHANNEL_ID: ${{ secrets.SLACK_IMAGE_AI_TEAM_CHANNEL_ID }}
+        run: node scripts/ryuukuru-team-reminder.js
+        
+      - name: Show execution summary
+        if: always()
+        run: |
+          echo "=== リュークル運営チームリマインド 実行結果サマリー ==="
+          echo "SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN != '' && '設定済み' || '未設定' }}"
+          echo "実行時刻: $(date)"
+          echo "次回実行予定: 次回のリマインド日時"
+        
+      - name: Upload logs (if error)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryuukuru-team-reminder-logs-${{ github.run_number }}
+          path: |
+            *.log
+            logs/
+          retention-days: 7

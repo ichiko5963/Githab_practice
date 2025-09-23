@@ -40,7 +40,7 @@ function generateWeeklyMeetingReminderMessage() {
   
   return `@channel
 
-リュウクル参上！！
+リュウクル参上！！🐲🔥
 
 今日は週の${dayOfWeek}、19時のリマインドタイムだぞ！
 交流会の準備はちゃんと進んでるか？
@@ -49,12 +49,12 @@ function generateWeeklyMeetingReminderMessage() {
 ✅ Slackに【告知文＋画像】を投稿したか？
 ✅ 集客に向けてDMや追加告知をやったか？
 
-もしまだなら👇
+もしまだなら
 - まずは3人でミーティングを組んで企画を詰めろ！
 - Slackに告知投稿を忘れるな！
 - 集客目標が危うければ、今すぐ声かけを増やせ！
 
-さらに大事なのがここだ👇
+さらに大事なのがここだ
 この入会フォーム（スプレッドシート）をチェックしろ！
 https://docs.google.com/spreadsheets/d/1ZP9Of73A1FXZ1-EVKdeVHzV56MN7RWrd3bsNWyL-4zE/edit?usp=sharing
 
@@ -63,8 +63,7 @@ https://docs.google.com/spreadsheets/d/1ZP9Of73A1FXZ1-EVKdeVHzV56MN7RWrd3bsNWyL-
 そして他のメンバーに1on1の日程調整を任せて、誰がやるか決めろ！
 
 仲間が増えるのは最高に嬉しいことだ！
-リュークル応援してるぞ！
-ご視聴ありがとうございました！`;
+リュークル応援してるぞ！`;
 }
 
 /**

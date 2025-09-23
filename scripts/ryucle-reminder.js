@@ -40,7 +40,12 @@ function saveProcessedMessages() {
     timestamp: new Date().toISOString()
   };
   try {
-    fs.writeFileSync('/tmp/processed_messages.json', JSON.stringify(data));
+    const dataDir = '/tmp/ryucle-data';
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(`${dataDir}/processed_messages.json`, JSON.stringify(data, null, 2));
+    console.log(`📚 処理済みメッセージを保存: ${processedMessages.size}件`);
   } catch (error) {
     console.error('❌ 処理済みメッセージの保存エラー:', error.message);
   }
@@ -49,13 +54,21 @@ function saveProcessedMessages() {
 // 処理済みメッセージをファイルから読み込む関数
 function loadProcessedMessages() {
   try {
-    const data = fs.readFileSync('/tmp/processed_messages.json', 'utf8');
+    const dataDir = '/tmp/ryucle-data';
+    const filePath = `${dataDir}/processed_messages.json`;
+    
+    if (!fs.existsSync(filePath)) {
+      console.log('📚 処理済みメッセージファイルが見つかりません（初回実行）');
+      return;
+    }
+    
+    const data = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(data);
     processedMessages.clear();
     parsed.messages.forEach(id => processedMessages.add(id));
     console.log(`📚 処理済みメッセージを読み込み: ${processedMessages.size}件`);
   } catch (error) {
-    console.log('📚 処理済みメッセージファイルが見つかりません（初回実行）');
+    console.log('📚 処理済みメッセージファイルの読み込みエラー:', error.message);
   }
 }
 
@@ -463,17 +476,23 @@ async function processMentionMessage(message, channelId) {
 async function main() {
   try {
     console.log('🚀 Ryucleリマインダーボットが起動しました！');
+    console.log(`📅 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: TZ })}`);
     
     // 処理済みメッセージを読み込み
     loadProcessedMessages();
     
     // Slackメンションをチェック
+    console.log('🔍 Slackメンションをチェック開始...');
     await checkSlackMentions();
     
     console.log('✅ メンションチェック完了');
+    console.log(`📊 処理済みメッセージ: ${processedMessages.size}件`);
+    console.log(`📊 確認待ちリマインダー: ${pendingConfirmations.size}件`);
+    console.log(`📊 スケジュール済みリマインダー: ${reminders.size}件`);
     
   } catch (error) {
     console.error('❌ メイン実行エラー:', error.message);
+    console.error('❌ スタックトレース:', error.stack);
     process.exit(1);
   }
 }
@@ -505,6 +524,12 @@ process.on('SIGINT', () => {
   // 処理済みメッセージを保存
   saveProcessedMessages();
   
+  console.log('✅ クリーンアップ完了');
   process.exit(0);
+});
+
+// プロセス終了時のクリーンアップ（正常終了時）
+process.on('exit', () => {
+  console.log('🛑 プロセス終了');
 });
 

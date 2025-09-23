@@ -8,6 +8,8 @@ on:
 jobs:
   ryucle-reminder:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # タイムアウト設定
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,9 +18,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci || npm i
+        run: |
+          npm ci || npm i
+          echo "Dependencies installed successfully"
+      
+      - name: Create data directory
+        run: |
+          mkdir -p /tmp/ryucle-data
+          echo "Data directory created"
       
       - name: Run Ryucle Reminder Bot
         env:
@@ -26,4 +36,40 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PORT: 3000
           TZ: Asia/Tokyo
-        run: node scripts/ryucle-reminder.js
+          NODE_ENV: production
+        run: |
+          echo "Starting Ryucle Reminder Bot..."
+          echo "Environment variables check:"
+          echo "- SLACK_BOT_TOKEN: $([ -n "$SLACK_BOT_TOKEN" ] && echo "✓ Set" || echo "✗ Not set")"
+          echo "- OPENAI_API_KEY: $([ -n "$OPENAI_API_KEY" ] && echo "✓ Set" || echo "✗ Not set")"
+          echo "- TZ: $TZ"
+          echo "- NODE_ENV: $NODE_ENV"
+          
+          # スクリプトの存在確認
+          if [ ! -f "scripts/ryucle-reminder.js" ]; then
+            echo "❌ Error: scripts/ryucle-reminder.js not found"
+            exit 1
+          fi
+          
+          # 構文チェック
+          node -c scripts/ryucle-reminder.js
+          echo "✓ Syntax check passed"
+          
+          # 実行
+          node scripts/ryucle-reminder.js
+          echo "✓ Ryucle Reminder Bot completed"
+      
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryucle-reminder-logs
+          path: /tmp/ryucle-data/
+          retention-days: 7
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up temporary files..."
+          rm -rf /tmp/ryucle-data/
+          echo "Cleanup completed"

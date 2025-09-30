@@ -1,0 +1,62 @@
+name: Ryuukuru Self Introduction Report
+
+on:
+  schedule:
+    # 4日おきに午後15:00 JST (06:00 UTC) に実行
+    # 開始日: 2025年9月22日15:00 JST
+    # cron: 分 時 日 月 曜日
+    # 4日おきの計算: 0 6 */4 * * (毎4日)
+    - cron: '0 6 */4 * *'
+  workflow_dispatch: # 手動実行も可能
+  push:
+    paths:
+      - 'scripts/ryuukuru-selfintro.js'
+      - '.github/workflows/ryuukuru-selfintro.yml'
+
+concurrency:
+  group: ryuukuru-selfintro
+  cancel-in-progress: true
+
+jobs:
+  ryuukuru-selfintro:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run Ryuukuru Self Introduction Report
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_SELFINTRO_CHANNEL_ID: ${{ secrets.SLACK_SELFINTRO_CHANNEL_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/ryuukuru-selfintro.js
+        
+      - name: Show execution summary
+        if: always()
+        run: |
+          echo "=== リュークル自己紹介定期報告 実行結果サマリー ==="
+          echo "SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN != '' && '設定済み' || '未設定' }}"
+          echo "SLACK_SELFINTRO_CHANNEL_ID: ${{ secrets.SLACK_SELFINTRO_CHANNEL_ID != '' && '設定済み' || '未設定' }}"
+          echo "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' && '設定済み' || '未設定' }}"
+          echo "実行時刻: $(date)"
+          echo "次回実行予定: 4日後"
+        
+      - name: Upload logs (if error)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryuukuru-selfintro-logs-${{ github.run_number }}
+          path: |
+            *.log
+            logs/
+          retention-days: 7

@@ -1,0 +1,56 @@
+name: Slack Channel Introduction
+
+on:
+  schedule:
+    # 毎週月曜日18:00 JST (09:00 UTC) に実行
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # 手動実行も可能
+  push:
+    paths:
+      - 'scripts/channel-intro.js'
+      - '.github/workflows/channel-intro.yml'
+
+concurrency:
+  group: slack-channel-intro
+  cancel-in-progress: true
+
+jobs:
+  channel-intro:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run channel introduction
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL }}
+        run: node scripts/channel-intro.js
+        
+      - name: Show execution summary
+        if: always()
+        run: |
+          echo "=== 実行結果サマリー ==="
+          echo "SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN != '' && '設定済み' || '未設定' }}"
+          echo "TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL != '' && '設定済み' || '未設定' }}"
+          echo "実行時刻: $(date)"
+        
+      - name: Upload logs (if error)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-intro-logs-${{ github.run_number }}
+          path: |
+            *.log
+            logs/
+          retention-days: 7

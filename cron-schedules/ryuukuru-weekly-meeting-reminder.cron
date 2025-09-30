@@ -1,0 +1,8 @@
+# リュークル週例ミーティングリマインド - Cron設定
+# 毎週水曜と木曜の15:00に実行
+
+# 水曜日 15:00
+0 15 * * 3 cd /Users/ichiokanaoto/slack-analytics && node scripts/ryuukuru-weekly-meeting-reminder.js
+
+# 木曜日 15:00  
+0 15 * * 4 cd /Users/ichiokanaoto/slack-analytics && node scripts/ryuukuru-weekly-meeting-reminder.js

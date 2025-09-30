@@ -74,85 +74,78 @@ function hasMessagesToday(messages) {
 }
 
 /**
- * りゅうクル口調のリマインドメッセージを送信
+ * 曜日ごとの担当者を取得
  */
-async function sendChatReminder() {
-  try {
-    console.log('りゅうクル雑談リマインドを送信中...');
-
-    const message = `@channel
-
-リュウクル参上！！🐲🔥
-
-おいおい、みんな！今日はまだ何も投稿してないじゃないか！
-「#3-雑談_質問部屋」はみんなの交流の場なんだぞ！
-
-何か一言でも投稿してみろよ！
-- 今日の天気の話
-- お昼ご飯の話  
-- ちょっとした質問
-- なんでもいいから一言！
-
-みんなの声を聞きたいんだ！リュークルが寂しがってるぞ〜😢
-
-投稿待ってるからな！`;
-
-    // トークンが設定されていない場合はテストモード
-    if (!slackToken) {
-      console.log(message);
-      console.log('='.repeat(50));
-      console.log('✅ テストモード: メッセージが正常に生成されました');
-      console.log(`📅 生成時刻: ${new Date().toLocaleString('ja-JP')}`);
-      console.log(`📢 対象チャンネル: ${channelId || 'SLACK_ZATSUDAN_CHANNEL_ID未設定'}`);
-      return;
-    }
-
-    const result = await slack.chat.postMessage({
-      channel: channelId,
-      text: message,
-      link_names: true,
-      username: 'リュークル',
-      icon_emoji: ':dragon:'
-    });
-
-    if (result.ok) {
-      console.log('✅ りゅうクル雑談リマインドを送信しました');
-      console.log(`📅 送信時刻: ${new Date().toLocaleString('ja-JP')}`);
-    } else {
-      console.error('❌ メッセージ送信に失敗しました:', result.error);
-    }
-
-  } catch (error) {
-    console.error('❌ エラーが発生しました:', error.message);
-    throw error;
-  }
+function getTodayResponsible() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=日曜, 1=月曜, 2=火曜, ...
+  
+  const responsible = {
+    1: '大山 竜輝', // 月曜
+    2: '市岡 直人', // 火曜
+    3: '折井 英人', // 水曜
+    4: '笹木 澪莉', // 木曜
+    5: '大前 綾香', // 金曜
+    6: '澁澤 圭佑'  // 土曜
+  };
+  
+  return responsible[dayOfWeek] || null;
 }
 
 /**
- * 経営部への報告メッセージを送信
+ * 曜日名を取得
  */
-async function sendReportToKeiei() {
+function getDayName() {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  
+  const dayNames = {
+    1: '月曜',
+    2: '火曜', 
+    3: '水曜',
+    4: '木曜',
+    5: '金曜',
+    6: '土曜'
+  };
+  
+  return dayNames[dayOfWeek] || null;
+}
+
+/**
+ * 経営部への担当者リマインドメッセージを送信
+ */
+async function sendResponsibleReminder() {
   try {
-    console.log('経営部への報告メッセージを送信中...');
+    console.log('経営部への担当者リマインドを送信中...');
 
-    const reportMessage = `📊 雑談チャンネル活動レポート
+    const todayResponsible = getTodayResponsible();
+    const dayName = getDayName();
+    
+    if (!todayResponsible || !dayName) {
+      console.log('📅 今日は担当者がいない日（日曜日）です');
+      return;
+    }
 
-本日（${new Date().toLocaleDateString('ja-JP')}）の「#3-雑談_質問部屋」の活動状況：
+    const reportMessage = `リュウクル参上！！🐲🔥
 
-❌ **投稿なし**
-- 0:00以降の投稿が0件でした
-- リマインドメッセージを送信済み
+今日は${dayName}だぞ！
+今日の担当者は **${todayResponsible}** さんだ！
 
-リュークルがみんなの投稿を待っています！🐲`;
+${todayResponsible}さん、今日もよろしくお願いします！
+リュークルが応援してるぞ〜💪
+
+頑張れ！頑張れ！`;
 
     // トークンが設定されていない場合はテストモード
     if (!slackToken) {
-      console.log('📋 経営部への報告メッセージ:');
+      console.log('📋 経営部への担当者リマインドメッセージ:');
       console.log('='.repeat(50));
       console.log(reportMessage);
       console.log('='.repeat(50));
-      console.log('✅ テストモード: 報告メッセージが正常に生成されました');
+      console.log('✅ テストモード: リマインドメッセージが正常に生成されました');
       console.log(`📢 報告先チャンネル: ${reportChannelId || 'SLACK_KEIEI_CHANNEL_ID未設定'}`);
+      console.log(`👤 今日の担当者: ${todayResponsible}`);
+      console.log(`📅 曜日: ${dayName}`);
       return;
     }
 
@@ -164,14 +157,15 @@ async function sendReportToKeiei() {
     });
 
     if (result.ok) {
-      console.log('✅ 経営部への報告メッセージを送信しました');
+      console.log('✅ 経営部への担当者リマインドを送信しました');
       console.log(`📅 送信時刻: ${new Date().toLocaleString('ja-JP')}`);
+      console.log(`👤 今日の担当者: ${todayResponsible}`);
     } else {
-      console.error('❌ 報告メッセージ送信に失敗しました:', result.error);
+      console.error('❌ リマインドメッセージ送信に失敗しました:', result.error);
     }
 
   } catch (error) {
-    console.error('❌ 報告メッセージ送信でエラーが発生しました:', error.message);
+    console.error('❌ リマインドメッセージ送信でエラーが発生しました:', error.message);
     throw error;
   }
 }
@@ -189,28 +183,15 @@ async function main() {
       console.error('❌ SLACK_ZATSUDAN_CHANNEL_IDが設定されていません');
       console.log('📝 テストモードでリマインドメッセージを表示します:');
       console.log('='.repeat(50));
-      await sendChatReminder();
+      await sendResponsibleReminder();
       return;
     }
     
     console.log(`📢 対象チャンネル: ${channelId}`);
     
-    // チャンネルのメッセージを取得
-    const messages = await fetchChannelMessages(channelId);
-    console.log(`📊 取得したメッセージ数: ${messages.length}件`);
-    
-    // 今日の投稿があるかチェック
-    const hasTodayMessages = hasMessagesToday(messages);
-    
-    if (!hasTodayMessages) {
-      console.log('📢 今日の投稿がないため、リマインドメッセージを送信します');
-      await sendChatReminder();
-      
-      console.log('📋 経営部への報告メッセージを送信します');
-      await sendReportToKeiei();
-    } else {
-      console.log('✅ 今日の投稿があるため、リマインドは送信しません');
-    }
+    // 経営部に担当者リマインドを送信
+    console.log('📋 経営部への担当者リマインドを送信します');
+    await sendResponsibleReminder();
     
     console.log('🎉 処理完了');
     

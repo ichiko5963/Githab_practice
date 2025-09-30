@@ -1,9 +1,9 @@
-name: りゅうクル雑談チャンネルリマインド
+name: りゅうクル担当者リマインド
 
 on:
   schedule:
-    # 毎日 20:00 JST = 11:00 UTC
-    - cron: '0 11 * * *'
+    # 毎日 19:00 JST = 10:00 UTC
+    - cron: '0 10 * * *'
   workflow_dispatch: # 手動実行も可能
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: 依存関係をインストール
         run: npm ci
         
-      - name: りゅうクル雑談チャンネルチェック＆リマインド
+      - name: りゅうクル担当者リマインド送信
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_ZATSUDAN_CHANNEL_ID: ${{ secrets.SLACK_ZATSUDAN_CHANNEL_ID }}
@@ -34,5 +34,5 @@ jobs:
       - name: 実行結果をログ出力
         if: always()
         run: |
-          echo "✅ りゅうクル雑談チャンネルチェックの実行が完了しました"
+          echo "✅ りゅうクル担当者リマインドの実行が完了しました"
           echo "📅 実行時刻: $(date '+%Y-%m-%d %H:%M:%S JST')"
